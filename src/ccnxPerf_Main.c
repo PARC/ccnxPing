@@ -65,32 +65,66 @@ consumer(void)
 
     assertNotNull(portal, "Expected a non-null CCNxPortal pointer.");
 
-    CCNxName *name = ccnxName_CreateFromURI("lci:/Hello/World");
+    char nameBuffer[100];
+
+    sprintf(nameBuffer,"lci:/%s/ping/%08lu","localhost",(long)100);
+    printf("Using name: %s\n",nameBuffer);
+
+    CCNxName *name = ccnxName_CreateFromURI(nameBuffer);
+
+    //CCNxNameSegment * name_sequence;
+    //name_sequence = ccnxNameSegment_CreateTypeValue(CCNxNameLabelType_App(10),);
+    //ccnxName_Append(name,);
 
     CCNxInterest *interest = ccnxInterest_CreateSimple(name);
     ccnxName_Release(&name);
 
     CCNxMetaMessage *message = ccnxMetaMessage_CreateFromInterest(interest);
-    
-    if (ccnxPortal_Send(portal, message)) {
-        while (ccnxPortal_IsError(portal) == false) {
-            CCNxMetaMessage *response = ccnxPortal_Receive(portal);
-            if (response != NULL) {
-                if (ccnxMetaMessage_IsContentObject(response)) {
-                    CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
 
-                    PARCBuffer *payload = ccnxContentObject_GetPayload(contentObject);
+#define MAX_PINGS 100
+    long total_rtt = 0;
+    long rtt;
 
-                    char *string = parcBuffer_ToString(payload);
-                    printf("%s\n", string);
-                    parcMemory_Deallocate((void **)&string);
+    struct timeval tv_send, tv_receive;
+    for(int pings = 0; pings < MAX_PINGS; pings++) {
+        gettimeofday(&tv_send,NULL);
+        if (ccnxPortal_Send(portal, message)) {
+            //usleep(10000);
+            while (ccnxPortal_IsError(portal) == false) {
+                CCNxMetaMessage *response = ccnxPortal_Receive(portal);
+                gettimeofday(&tv_receive,NULL);
+                if (response != NULL) {
+                    if (ccnxMetaMessage_IsContentObject(response)) {
+                        CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
 
-                    break;
+                        PARCBuffer *payload = ccnxContentObject_GetPayload(contentObject);
+
+                        //char *string = parcBuffer_ToString(payload);
+                        //printf("%s\n", string);
+                        //parcMemory_Deallocate((void **) &string);
+
+                        rtt = (tv_receive.tv_sec - tv_send.tv_sec) * 1000000 +
+                                tv_receive.tv_usec - tv_send.tv_usec;
+
+                        total_rtt = total_rtt + rtt;
+
+                        char * name = ccnxName_ToString(ccnxContentObject_GetName(contentObject));
+
+                        printf("%s %luus\n",name,rtt);
+
+                        break;
+                    }
                 }
+                ccnxMetaMessage_Release(&response);
             }
-            ccnxMetaMessage_Release(&response);
         }
+        if(!(pings % 5)) {
+            usleep(100);
+        }
+
     }
+
+    printf("Avg: %lu  (%lu)\n",total_rtt/MAX_PINGS,(long)MAX_PINGS);
 
     ccnxPortal_Release(&portal);
 

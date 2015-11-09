@@ -78,9 +78,9 @@ producer(void)
     
     assertNotNull(portal, "Expected a non-null CCNxPortal pointer.");
 
-    CCNxName *listenName = ccnxName_CreateFromURI("lci:/Hello");
+    CCNxName *listenName = ccnxName_CreateFromURI("lci:/localhost/ping");
     CCNxName *goodbye = ccnxName_CreateFromURI("lci:/Hello/Goodbye%21");
-    CCNxName *contentName = ccnxName_CreateFromURI("lci:/Hello/World");
+    CCNxName *contentName = ccnxName_CreateFromURI("lci:/localhost/ping");
 
     if (ccnxPortal_Listen(portal, listenName)) {
         while (true) {
@@ -95,11 +95,11 @@ producer(void)
             if (interest != NULL) {
                 CCNxName *interestName = ccnxInterest_GetName(interest);
 
-                if (ccnxName_Equals(interestName, contentName)) {
+                //if (ccnxName_Equals(interestName, contentName)) {
 
                     PARCBuffer *payload = makePayload();
 
-                    CCNxContentObject *contentObject = ccnxContentObject_CreateWithDataPayload(contentName, payload);
+                    CCNxContentObject *contentObject = ccnxContentObject_CreateWithDataPayload(interestName, payload);
 
                     CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(contentObject);
 
@@ -110,9 +110,9 @@ producer(void)
                     ccnxMetaMessage_Release(&message);
 
                     parcBuffer_Release(&payload);
-                } else if (ccnxName_Equals(interestName, goodbye)) {
-                    break;
-                }
+                //} else if (ccnxName_Equals(interestName, goodbye)) {
+                //    break;
+                //}
             }
             ccnxMetaMessage_Release(&request);
         }
