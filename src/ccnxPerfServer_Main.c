@@ -82,9 +82,9 @@ producer(void)
     CCNxName *goodbye = ccnxName_CreateFromURI("lci:/Hello/Goodbye%21");
     CCNxName *contentName = ccnxName_CreateFromURI("lci:/localhost/ping");
 
-    if (ccnxPortal_Listen(portal, listenName)) {
+    if (ccnxPortal_Listen(portal, listenName, CCNxTransportStackTimeout_Never)) {
         while (true) {
-            CCNxMetaMessage *request = ccnxPortal_Receive(portal);
+            CCNxMetaMessage *request = ccnxPortal_Receive(portal, CCNxTransportStackTimeout_Never);
 
             if (request == NULL) {
                 break;
@@ -103,7 +103,7 @@ producer(void)
 
                     CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(contentObject);
 
-                    if (ccnxPortal_Send(portal, message) == false) {
+                    if (ccnxPortal_Send(portal, message, CCNxTransportStackTimeout_Never) == false) {
                         fprintf(stderr, "ccnxPortal_Send failed: %d\n", ccnxPortal_GetError(portal));
                     }
 

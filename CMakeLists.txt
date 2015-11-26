@@ -3,9 +3,9 @@ project(ccnx_perf)
 
 set(CCNX_HOME $ENV{CCNX_HOME})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall")
 
-set(CCNX_LIBRARIES longbow parc ccnx_common ccnx_api_portal rta ccnx_api_control ccnx_api_notify)
+set(CCNX_LIBRARIES longbow longbow-ansiterm parc ccnx_common ccnx_api_portal rta ccnx_api_control ccnx_api_notify)
 
 set(CCNX_PERF_CLIENT_SOURCE_FILES
         src/ccnxPerf_Main.c)

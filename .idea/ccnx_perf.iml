@@ -182,8 +182,8 @@
           <root url="file:///System/Library/Frameworks/VideoToolbox.framework/Headers" />
           <root url="file:///System/Library/Frameworks/vmnet.framework/Headers" />
           <root url="file:///System/Library/Frameworks/WebKit.framework/Headers" />
-          <root url="file://$MODULE_DIR$/../../build/include" />
           <root url="file://$MODULE_DIR$/src" />
+          <root url="file://$MODULE_DIR$/../../build/include" />
           <root url="file:///usr/include" />
           <root url="file:///usr/local/include" />
         </CLASSES>
@@ -359,8 +359,8 @@
           <root url="file:///System/Library/Frameworks/VideoToolbox.framework/Headers" />
           <root url="file:///System/Library/Frameworks/vmnet.framework/Headers" />
           <root url="file:///System/Library/Frameworks/WebKit.framework/Headers" />
-          <root url="file://$MODULE_DIR$/../../build/include" />
           <root url="file://$MODULE_DIR$/src" />
+          <root url="file://$MODULE_DIR$/../../build/include" />
           <root url="file:///usr/include" />
           <root url="file:///usr/local/include" />
         </SOURCES>

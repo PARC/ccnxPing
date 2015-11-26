@@ -9,7 +9,6 @@
  * @author Glenn Scott, Computing Science Laboratory, PARC
  * @copyright 2014-2015 Palo Alto Research Center, Inc. (PARC), A Xerox Company. All Rights Reserved.
  */
-#include <config.h>
 #include <stdio.h>
 
 #include <LongBow/runtime.h>
@@ -21,7 +20,23 @@
 #include <parc/security/parc_IdentityFile.h>
 #include <parc/security/parc_PublicKeySignerPkcs12Store.h>
 
-#include <parc/algol/parc_Memory.h>
+//#include <parc/algol/parc_Memory.h>
+
+
+enum options_errors {
+    OPTIONS_PARSE_ERROR = -1
+};
+
+enum perf_mode {
+    PERF_MODE_NONE = 0,
+    PERF_MODE_LATENCY,
+    PERF_MODE_PINGPONG
+};
+
+typedef struct Perf_Options {
+    enum perf_mode mode;
+} perf_options;
+
 
 PARCIdentity *
 createAndGetIdentity(void)
@@ -61,7 +76,7 @@ consumer(void)
     
     CCNxPortalFactory *factory = setupConsumerFactory();
    
-    CCNxPortal *portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message, &ccnxPortalAttributes_Blocking);
+    CCNxPortal *portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message, &ccnxPortalAttributes_NonBlocking);
 
     assertNotNull(portal, "Expected a non-null CCNxPortal pointer.");
 
@@ -88,16 +103,16 @@ consumer(void)
     struct timeval tv_send, tv_receive;
     for(int pings = 0; pings < MAX_PINGS; pings++) {
         gettimeofday(&tv_send,NULL);
-        if (ccnxPortal_Send(portal, message)) {
+        if (ccnxPortal_Send(portal, message, CCNxTransportStackTimeout_Never)) {
             //usleep(10000);
             while (ccnxPortal_IsError(portal) == false) {
-                CCNxMetaMessage *response = ccnxPortal_Receive(portal);
+                CCNxMetaMessage *response = ccnxPortal_Receive(portal,CCNxTransportStackTimeout_MicroSeconds(100));
                 gettimeofday(&tv_receive,NULL);
                 if (response != NULL) {
                     if (ccnxMetaMessage_IsContentObject(response)) {
                         CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
 
-                        PARCBuffer *payload = ccnxContentObject_GetPayload(contentObject);
+                        //PARCBuffer *payload = ccnxContentObject_GetPayload(contentObject);
 
                         //char *string = parcBuffer_ToString(payload);
                         //printf("%s\n", string);
@@ -108,14 +123,18 @@ consumer(void)
 
                         total_rtt = total_rtt + rtt;
 
-                        char * name = ccnxName_ToString(ccnxContentObject_GetName(contentObject));
+                        char * nameOfInterest = ccnxName_ToString(ccnxContentObject_GetName(contentObject));
 
-                        printf("%s %luus\n",name,rtt);
+                        printf("%s %luus\n",nameOfInterest,rtt);
 
                         break;
                     }
+                    ccnxMetaMessage_Release(&response);
                 }
-                ccnxMetaMessage_Release(&response);
+                else {
+                    // Didn't receive response in time
+                    printf("some/name 000\n");
+                }
             }
         }
         if(!(pings % 5)) {
@@ -134,8 +153,49 @@ consumer(void)
     return 0;
 }
 
+int help(){
+    printf("print the help here!");
+    return 0;
+}
+
+int options_init(perf_options * options){
+    memset(options,0,sizeof(perf_options));
+    options->mode = PERF_MODE_NONE;
+    return 0;
+}
+
+int options_parse_commandline(perf_options * options, int argc, char* argv[]){
+    int c;
+    while((c = getopt(argc,argv,"ph")) != -1){
+        switch(c){
+            case 'p':
+                if(options->mode != PERF_MODE_NONE){
+                    // Error, multiple modes specified
+                    return OPTIONS_PARSE_ERROR;
+                }
+                options->mode = PERF_MODE_PINGPONG;
+                break;
+            case 'h':
+                help();
+                exit(EXIT_SUCCESS);
+                //break;
+            default:
+                break;
+        }
+    }
+
+    if(options->mode == PERF_MODE_NONE){
+        // set the default mode
+        options->mode = PERF_MODE_LATENCY;
+    }
+    return 0;
+};
+
 int
 main(int argc, char *argv[argc])
 {
+    perf_options options;
+    options_init(&options);
+    options_parse_commandline(&options, argc, argv);
     return consumer();
 }
