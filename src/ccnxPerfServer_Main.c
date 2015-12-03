@@ -9,7 +9,6 @@
  * @author Glenn Scott, Computing Science Laboratory, PARC
  * @copyright 2014-2015 Palo Alto Research Center, Inc. (PARC), A Xerox Company. All Rights Reserved.
  */
-#include <config.h>
 #include <LongBow/runtime.h>
 
 #include <time.h>
