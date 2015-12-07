@@ -10,6 +10,7 @@
  * @copyright 2014-2015 Palo Alto Research Center, Inc. (PARC), A Xerox Company. All Rights Reserved.
  */
 #include <stdio.h>
+#include <errno.h>
 
 #include <LongBow/runtime.h>
 
@@ -178,6 +179,11 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
                 send_us = now_us;
                 next_packet_send_us = now_us + delay_us;
                 stats_add_interest_sent(&options->stats, nameBuffer,send_us,message);
+
+                if(ccnxPortal_IsError(options->portal)) {
+                    int error = ccnxPortal_GetError(options->portal);
+                    printf("ERROR SEND %s\n",strerror(error));
+                }
             }
         }
         else {
@@ -188,13 +194,14 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
             //printf("Wait for %llu\n",next_packet_send_us - now_us);
         }
 
-        if(ccnxPortal_IsError(options->portal)) {
-            printf("ERROR from Portal\n");
-        }
 
         receive_delay_us = next_packet_send_us - now_us;
         response = ccnxPortal_Receive(options->portal, &receive_delay_us);
         while(response != NULL) {
+            if(ccnxPortal_IsError(options->portal)) {
+                int error = ccnxPortal_GetError(options->portal);
+                printf("ERROR RECV %s\n",strerror(error));
+            }
             now_us = get_now_us();
             if (ccnxMetaMessage_IsContentObject(response)) {
                 CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
@@ -280,10 +287,10 @@ int data_initialize(perf_options * options){
 }
 
 int performance_test_run(perf_options * options){
-    perf_ping(options, 20, 0);
+    perf_ping(options, 100, 0);
     stats_print_average(&options->stats);
     stats_reset(&(options->stats));
-    perf_ping(options, 20, 1000000);
+    perf_ping(options, 10, 1000000);
     stats_print_average(&options->stats);
     return 0;
 }
