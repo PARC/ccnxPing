@@ -21,6 +21,8 @@
 #include <parc/security/parc_PublicKeySignerPkcs12Store.h>
 
 #define NAME_BUFFER_SIZE 100
+#define MAX_STAT_ENTRIES 10000
+#define RECEIVE_TIMEOUT_US 1000000
 
 enum options_errors {
     OPTIONS_PARSE_ERROR = -1
@@ -36,6 +38,27 @@ enum perf_mode {
     PERF_MODE_ALL
 };
 
+enum stats_print {
+    STATS_PRINT_FALSE = 0,
+    STATS_PRINT_TRUE
+};
+
+typedef struct Perf_Stat_Entry {
+    uint64_t send_us;
+    uint64_t received_us;
+    uint64_t rtt;
+    char nameSent[NAME_BUFFER_SIZE];
+    CCNxMetaMessage * message;
+} perf_stat_entry;
+
+typedef struct Perf_Stats {
+    uint64_t total_rtt;
+    int total_pings_received;
+    int total_pings_sent;
+    perf_stat_entry pings[MAX_STAT_ENTRIES];
+    int next_stat_entry;
+} perf_stats;
+
 typedef struct Perf_Options {
     uint64_t receive_timeout_us;
     CCNxPortalFactory *factory;
@@ -44,6 +67,7 @@ typedef struct Perf_Options {
     int interest_counter;
     char * prefix;
     char * service_name;
+    perf_stats stats;
 } perf_options;
 
 
@@ -90,16 +114,50 @@ int create_name(perf_options * options, char * buffer, int bufferSize){
     return 0;
 }
 
+int stats_add_interest_sent(perf_stats * stats, char * name, uint64_t time_us, CCNxMetaMessage * message){
+    stats->pings[stats->next_stat_entry].send_us = time_us;
+    strncpy(stats->pings[stats->next_stat_entry].nameSent,name,NAME_BUFFER_SIZE);
+    stats->total_pings_sent = stats->total_pings_sent + 1;
+    //printf("%llu :: SEND %s\n",(time_us / 1000) % 100000, name);
+    stats->next_stat_entry = stats->next_stat_entry + 1;
+    return 0;
+}
+
+int stats_print_average(perf_stats * stats){
+    printf("Sent = %u : Received = %u : AvgDelay %llu us\n",
+        stats->total_pings_sent, stats->total_pings_received, stats->total_rtt / stats->total_pings_received);
+    return 0;
+}
+
+int stats_reset(perf_stats * stats){
+    memset(stats,0,sizeof(perf_stats));
+    return 0;
+}
+
+int stats_add_content_received(perf_stats * stats, char * name, uint64_t time_us, CCNxMetaMessage * message, enum stats_print print){
+    stats->total_pings_received = stats->total_pings_received + 1;
+    //printf("%llu :: RECV %s\n",(time_us / 1000) % 100000, name);
+    for(int i = 0; i<MAX_STAT_ENTRIES; i++) {
+        if (strncmp(stats->pings[i].nameSent, name, NAME_BUFFER_SIZE) == 0) {
+            stats->pings[i].received_us = time_us;
+            stats->pings[i].rtt = stats->pings[i].received_us - stats->pings[i].send_us;
+            stats->total_rtt = stats->total_rtt + stats->pings[i].rtt;
+            if (print == STATS_PRINT_TRUE) {
+                printf("%s\t%lluus\n", name, stats->pings[i].rtt);
+            }
+            return 0;
+        }
+    }
+    printf("ERROR: %s not found at %llu\n",name,time_us);
+    return 0;
+}
+
 int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
     CCNxName *name = NULL;
     CCNxInterest *interest = NULL;
     CCNxMetaMessage *message = NULL;
     CCNxMetaMessage *response = NULL;
     char nameBuffer[NAME_BUFFER_SIZE];
-
-
-    uint64_t total_rtt = 0;
-    uint64_t rtt;
 
     uint64_t send_us;
     uint64_t receive_delay_us;
@@ -108,11 +166,9 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
 
     for(int pings = 0; pings <= total_pings ; pings++) {
 
-
         if (pings < total_pings) {
             // We want to send an interest ping
             create_name(options,nameBuffer,NAME_BUFFER_SIZE);
-            printf("Using name: %s\n",nameBuffer);
             name = ccnxName_CreateFromURI(nameBuffer);
             interest = ccnxInterest_CreateSimple(name);
             message = ccnxMetaMessage_CreateFromInterest(interest);
@@ -121,6 +177,7 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
                 now_us = get_now_us();
                 send_us = now_us;
                 next_packet_send_us = now_us + delay_us;
+                stats_add_interest_sent(&options->stats, nameBuffer,send_us,message);
             }
         }
         else {
@@ -128,42 +185,31 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
             now_us = get_now_us();
             send_us = now_us;
             next_packet_send_us = now_us + options->receive_timeout_us;
-            printf("Done with the pings, now we get to wait for stragglers\n");
+            //printf("Wait for %llu\n",next_packet_send_us - now_us);
         }
 
-        while (ccnxPortal_IsError(options->portal) == false) {
-            receive_delay_us = next_packet_send_us - now_us;
-            printf("Receive with delay: receive_delay %llu  (now %llu, delay %llu)\n",receive_delay_us, now_us, delay_us);
-            printf("receive_delay: %llu NOW: %llu, Next_packet %llu\n",receive_delay_us,now_us,next_packet_send_us);
-            response = ccnxPortal_Receive(options->portal, &receive_delay_us);
-            while(response != NULL) {
-                // We received a response, process the response
-                now_us = get_now_us();
-                if (ccnxMetaMessage_IsContentObject(response)) {
-                    CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
+        if(ccnxPortal_IsError(options->portal)) {
+            printf("ERROR from Portal\n");
+        }
 
-                    rtt = now_us - send_us;
+        receive_delay_us = next_packet_send_us - now_us;
+        response = ccnxPortal_Receive(options->portal, &receive_delay_us);
+        while(response != NULL) {
+            now_us = get_now_us();
+            if (ccnxMetaMessage_IsContentObject(response)) {
+                CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
 
-                    total_rtt = total_rtt + rtt;
+                char *nameOfContent = ccnxName_ToString(ccnxContentObject_GetName(contentObject));
 
-                    char *nameOfInterest = ccnxName_ToString(ccnxContentObject_GetName(contentObject));
-
-                    printf("%s %luus\n", nameOfInterest, (long)rtt);
-                }
-                ccnxMetaMessage_Release(&response);
-                // We have processed a response, we should wait more until the timeout occurs or we get another response.
-                receive_delay_us = next_packet_send_us - now_us;
-                printf("We didn't time out\n");
-                printf("receive_delay: %llu NOW: %llu, Next_packet %llu\n",receive_delay_us,now_us,next_packet_send_us);
-                response = ccnxPortal_Receive(options->portal, &receive_delay_us);
+                stats_add_content_received(&options->stats, nameOfContent,now_us,response,STATS_PRINT_TRUE);
             }
-            // We timed out
-            printf(" timed out (delay: %llu,  receive_delay_us: %llu)\n",delay_us, receive_delay_us);
+            ccnxMetaMessage_Release(&response);
+            receive_delay_us = next_packet_send_us - now_us;
+            //printf("Wait for %llu\n",next_packet_send_us - now_us);
+            response = ccnxPortal_Receive(options->portal, &receive_delay_us);
         }
-
     }
 
-    printf("Avg: %lu  (%lu)\n",(long)total_rtt/total_pings,(long)total_pings);
     return 0;
 }
 
@@ -229,13 +275,16 @@ int data_initialize(perf_options * options){
     options->interest_counter = 100;
     options->prefix = "localhost";
     options->service_name = "ping";
-    options->receive_timeout_us = 5000000;
+    options->receive_timeout_us = RECEIVE_TIMEOUT_US;
     return 0;
 }
 
 int performance_test_run(perf_options * options){
-    perf_ping(options, 10, 0);
-    perf_ping(options, 10, 1000000);
+    perf_ping(options, 20, 0);
+    stats_print_average(&options->stats);
+    stats_reset(&(options->stats));
+    perf_ping(options, 20, 1000000);
+    stats_print_average(&options->stats);
     return 0;
 }
 
