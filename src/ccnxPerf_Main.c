@@ -10,7 +10,7 @@
  * @copyright 2014-2015 Palo Alto Research Center, Inc. (PARC), A Xerox Company. All Rights Reserved.
  */
 #include <stdio.h>
-#include <errno.h>
+#include <getopt.h>
 
 #include <LongBow/runtime.h>
 
@@ -34,7 +34,7 @@ enum options_errors {
  */
 enum perf_mode {
     PERF_MODE_NONE = 0,
-    PERF_MODE_LATENCY,
+    PERF_MODE_FLOOD,
     PERF_MODE_PINGPONG,
     PERF_MODE_ALL
 };
@@ -48,6 +48,7 @@ typedef struct Perf_Stat_Entry {
     uint64_t send_us;
     uint64_t received_us;
     uint64_t rtt;
+    size_t size;
     char nameSent[NAME_BUFFER_SIZE];
     CCNxMetaMessage * message;
 } perf_stat_entry;
@@ -66,9 +67,13 @@ typedef struct Perf_Options {
     CCNxPortal *portal;
     enum perf_mode mode;
     int interest_counter;
+    int iterations;
+    uint64_t interval_us;
     char * prefix;
     char * service_name;
     perf_stats stats;
+    int nonce;
+    int payload_size;
 } perf_options;
 
 
@@ -110,7 +115,12 @@ setupConsumerFactory(void)
 }
 
 int create_name(perf_options * options, char * buffer, int bufferSize){
-    snprintf(buffer,bufferSize,"lci:/%s/%s/%08lu",options->prefix, options->service_name,(long)options->interest_counter);
+    snprintf(buffer,bufferSize,"lci:/%s/%s/%x/%u/%06lu",
+             options->prefix,
+             options->service_name,
+             options->nonce,
+             options->payload_size,
+             (long)options->interest_counter);
     options->interest_counter = options->interest_counter + 1;
     return 0;
 }
@@ -143,8 +153,14 @@ int stats_add_content_received(perf_stats * stats, char * name, uint64_t time_us
             stats->pings[i].received_us = time_us;
             stats->pings[i].rtt = stats->pings[i].received_us - stats->pings[i].send_us;
             stats->total_rtt = stats->total_rtt + stats->pings[i].rtt;
+            CCNxContentObject * contentObject = ccnxMetaMessage_GetContentObject(message);
+            PARCBuffer * payload = ccnxContentObject_GetPayload(contentObject);
+            stats->pings[i].size = parcBuffer_Capacity(payload);
+
             if (print == STATS_PRINT_TRUE) {
-                printf("%s\t%lluus\n", name, stats->pings[i].rtt);
+                printf("%s\t%lluus\t%lub\n", name,
+                        stats->pings[i].rtt,
+                        stats->pings[i].size);
             }
             return 0;
         }
@@ -211,7 +227,12 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
                 stats_add_content_received(&options->stats, nameOfContent,now_us,response,STATS_PRINT_TRUE);
             }
             ccnxMetaMessage_Release(&response);
-            receive_delay_us = next_packet_send_us - now_us;
+            if(pings < total_pings){
+                receive_delay_us = next_packet_send_us - now_us;
+            }
+            else {
+                receive_delay_us = options->receive_timeout_us;
+            }
             //printf("Wait for %llu\n",next_packet_send_us - now_us);
             response = ccnxPortal_Receive(options->portal, &receive_delay_us);
         }
@@ -221,7 +242,7 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
 }
 
 int help(){
-    printf("print the help here!");
+    printf("print the help here!\n");
     return 0;
 }
 
@@ -232,8 +253,17 @@ int options_init(perf_options * options){
 }
 
 int options_parse_commandline(perf_options * options, int argc, char* argv[]){
+    static struct option longopts[] = {
+            { "ping",       no_argument,        NULL,'p' },
+            { "flood",      no_argument,        NULL,'f' },
+            { "iterations", required_argument,  NULL,'n'},
+            { "size",       required_argument,  NULL,'s'},
+            { "help",       no_argument,        NULL,'h'},
+            { NULL,0,NULL,0}
+    };
+
     int c;
-    while((c = getopt(argc,argv,"ph")) != -1){
+    while((c = getopt_long(argc,argv,"phfn:s:",longopts,NULL)) != -1){
         switch(c){
             case 'p':
                 if(options->mode != PERF_MODE_NONE){
@@ -241,6 +271,19 @@ int options_parse_commandline(perf_options * options, int argc, char* argv[]){
                     return OPTIONS_PARSE_ERROR;
                 }
                 options->mode = PERF_MODE_PINGPONG;
+                break;
+            case 'f':
+                if(options->mode != PERF_MODE_NONE){
+                    // Error, multiple modes specified
+                    return OPTIONS_PARSE_ERROR;
+                }
+                options->mode = PERF_MODE_FLOOD;
+                break;
+            case 'n':
+                sscanf(optarg,"%u",&(options->iterations));
+                break;
+            case 's':
+                sscanf(optarg,"%u",&(options->payload_size));
                 break;
             case 'h':
                 help();
@@ -253,7 +296,7 @@ int options_parse_commandline(perf_options * options, int argc, char* argv[]){
 
     if(options->mode == PERF_MODE_NONE){
         // set the default mode
-        options->mode = PERF_MODE_LATENCY;
+        options->mode = PERF_MODE_ALL;
     }
     return 0;
 };
@@ -279,19 +322,39 @@ int portal_finalize(perf_options * options){
 }
 
 int data_initialize(perf_options * options){
+    srand(get_now_us());
     options->interest_counter = 100;
     options->prefix = "localhost";
     options->service_name = "ping";
     options->receive_timeout_us = RECEIVE_TIMEOUT_US;
+    options->iterations = 10;
+    options->interval_us = 1000000;
+    options->nonce=rand();
     return 0;
 }
 
 int performance_test_run(perf_options * options){
-    perf_ping(options, 100, 0);
-    stats_print_average(&options->stats);
-    stats_reset(&(options->stats));
-    perf_ping(options, 10, 1000000);
-    stats_print_average(&options->stats);
+    switch(options->mode){
+        case PERF_MODE_ALL:
+            perf_ping(options, 100, 0);
+            stats_print_average(&options->stats);
+            stats_reset(&(options->stats));
+            perf_ping(options, 10, 1000000);
+            stats_print_average(&options->stats);
+            break;
+        case PERF_MODE_FLOOD:
+            perf_ping(options, options->iterations, 0);
+            stats_print_average(&options->stats);
+            break;
+        case PERF_MODE_PINGPONG:
+            perf_ping(options, options->iterations, options->interval_us);
+            stats_print_average(&options->stats);
+            break;
+        case PERF_MODE_NONE:
+        default:
+            printf("Error, uknown mode");
+            break;
+    }
     return 0;
 }
 
@@ -304,8 +367,8 @@ main(int argc, char *argv[argc])
 {
     perf_options options;
     options_init(&options);
-    options_parse_commandline(&options, argc, argv);
     data_initialize(&options);
+    options_parse_commandline(&options, argc, argv);
     portal_initialize(&options);
     performance_test_run(&options);
     data_print_summary(&options);

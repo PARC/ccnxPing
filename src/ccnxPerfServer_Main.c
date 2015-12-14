@@ -22,6 +22,11 @@
 
 #include <ccnx/common/ccnx_Name.h>
 
+#define PAYLOAD_MAX_SIZE 64000
+#define NAME_SEGMENT_SIZE_MAX 100
+
+char generalPayload[PAYLOAD_MAX_SIZE];
+
 PARCIdentity *
 createAndGetIdentity(void)
 {
@@ -54,15 +59,9 @@ setupPortalFactory(void)
 }
 
 PARCBuffer *
-makePayload(void)
+makePayload(size_t length)
 {
-    time_t theTime = time(0);
-
-    PARCBufferComposer *composer = parcBufferComposer_Create();
-    parcBufferComposer_Format(composer, "Hello World. The time is %s", ctime(&theTime));
-    PARCBuffer *payload = parcBufferComposer_ProduceBuffer(composer);
-    parcBufferComposer_Release(&composer);
-
+    PARCBuffer *payload = parcBuffer_Wrap(generalPayload,PAYLOAD_MAX_SIZE,0,length);
     return payload;
 }
 
@@ -70,7 +69,6 @@ int
 producer(void)
 {
     parcSecurity_Init();
-
     CCNxPortalFactory *factory = setupPortalFactory();
 
     CCNxPortal *portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message, &ccnxPortalAttributes_Blocking);
@@ -81,9 +79,9 @@ producer(void)
     CCNxName *goodbye = ccnxName_CreateFromURI("lci:/Hello/Goodbye%21");
     CCNxName *contentName = ccnxName_CreateFromURI("lci:/localhost/ping");
 
-    if (ccnxPortal_Listen(portal, listenName, CCNxTransportStackTimeout_Never)) {
+    if (ccnxPortal_Listen(portal, listenName, CCNxStackTimeout_Never)) {
         while (true) {
-            CCNxMetaMessage *request = ccnxPortal_Receive(portal, CCNxTransportStackTimeout_Never);
+            CCNxMetaMessage *request = ccnxPortal_Receive(portal, CCNxStackTimeout_Never);
 
             if (request == NULL) {
                 break;
@@ -94,24 +92,41 @@ producer(void)
             if (interest != NULL) {
                 CCNxName *interestName = ccnxInterest_GetName(interest);
 
-                //if (ccnxName_Equals(interestName, contentName)) {
+                char * name = ccnxName_ToString(interestName);
+                char prefix[NAME_SEGMENT_SIZE_MAX];
+                char appname[NAME_SEGMENT_SIZE_MAX];
+                char nonce[NAME_SEGMENT_SIZE_MAX];
+                int payload_size;
+                size_t interest_counter;
 
-                    PARCBuffer *payload = makePayload();
+                sscanf(name,"lci:/%[^'/']/%[^'/']/%[^'/']/%u/%lu",
+                         prefix,
+                         appname,
+                         nonce,
+                         &payload_size,
+                         &interest_counter);
 
-                    CCNxContentObject *contentObject = ccnxContentObject_CreateWithDataPayload(interestName, payload);
+                //printf("Got:  lci:||%s||%s||%s||%u||%lu\n",
+                //       prefix,
+                //       appname,
+                //       nonce,
+                //       payload_size,
+                //       interest_counter);
 
-                    CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(contentObject);
+                PARCBuffer *payload = makePayload(payload_size);
 
-                    if (ccnxPortal_Send(portal, message, CCNxTransportStackTimeout_Never) == false) {
-                        fprintf(stderr, "ccnxPortal_Send failed: %d\n", ccnxPortal_GetError(portal));
-                    }
+                CCNxContentObject *contentObject = ccnxContentObject_CreateWithDataPayload(interestName, payload);
 
-                    ccnxMetaMessage_Release(&message);
+                CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(contentObject);
 
-                    parcBuffer_Release(&payload);
-                //} else if (ccnxName_Equals(interestName, goodbye)) {
-                //    break;
-                //}
+                if (ccnxPortal_Send(portal, message, CCNxStackTimeout_Never) == false) {
+                    fprintf(stderr, "ccnxPortal_Send failed: %d\n", ccnxPortal_GetError(portal));
+                }
+
+                ccnxMetaMessage_Release(&message);
+
+                parcBuffer_Release(&payload);
+
             }
             ccnxMetaMessage_Release(&request);
         }
