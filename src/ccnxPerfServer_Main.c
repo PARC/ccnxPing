@@ -9,9 +9,12 @@
  * @author Glenn Scott, Computing Science Laboratory, PARC
  * @copyright 2014-2015 Palo Alto Research Center, Inc. (PARC), A Xerox Company. All Rights Reserved.
  */
+
+#include <stdio.h>
+#include <time.h>
+
 #include <LongBow/runtime.h>
 
-#include <time.h>
 
 #include <ccnx/api/ccnx_Portal/ccnx_Portal.h>
 #include <ccnx/api/ccnx_Portal/ccnx_PortalRTA.h>
@@ -71,7 +74,7 @@ producer(void)
     parcSecurity_Init();
     CCNxPortalFactory *factory = setupPortalFactory();
 
-    CCNxPortal *portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message, &ccnxPortalAttributes_Blocking);
+    CCNxPortal *portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
     
     assertNotNull(portal, "Expected a non-null CCNxPortal pointer.");
 
@@ -79,7 +82,7 @@ producer(void)
     CCNxName *goodbye = ccnxName_CreateFromURI("lci:/Hello/Goodbye%21");
     CCNxName *contentName = ccnxName_CreateFromURI("lci:/localhost/ping");
 
-    if (ccnxPortal_Listen(portal, listenName, CCNxStackTimeout_Never)) {
+    if (ccnxPortal_Listen(portal, listenName, 60 * 60 * 24 * 365, CCNxStackTimeout_Never)) {
         while (true) {
             CCNxMetaMessage *request = ccnxPortal_Receive(portal, CCNxStackTimeout_Never);
 

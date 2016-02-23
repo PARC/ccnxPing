@@ -306,7 +306,7 @@ int portal_initialize(perf_options * options){
     parcSecurity_Init();
 
     options->factory = setupConsumerFactory();
-    options->portal = ccnxPortalFactory_CreatePortal(options->factory, ccnxPortalRTA_Message, &ccnxPortalAttributes_NonBlocking);
+    options->portal = ccnxPortalFactory_CreatePortal(options->factory, ccnxPortalRTA_Message);
 
     assertNotNull(options->portal, "Expected a non-null CCNxPortal pointer.");
     return 0;
