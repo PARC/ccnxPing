@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.3)
-project(ccnx_perf)
+project(ccnxPerf)
+
+include( CTest )
+#enable_testing()
 
 set(CCNX_HOME $ENV{CCNX_HOME})
 
@@ -18,10 +21,10 @@ include_directories(src)
 
 link_directories(${CCNX_HOME}/lib)
 
-add_executable(ccnx_perf ${CCNX_PERF_CLIENT_SOURCE_FILES})
-target_link_libraries(ccnx_perf ${CCNX_LIBRARIES})
-install(TARGETS ccnx_perf RUNTIME DESTINATION bin)
+add_executable(ccnxPerf ${CCNX_PERF_CLIENT_SOURCE_FILES})
+target_link_libraries(ccnxPerf ${CCNX_LIBRARIES})
+install(TARGETS ccnxPerf RUNTIME DESTINATION bin)
 
-add_executable(ccnx_perf_server ${CCNX_PERF_SERVER_SOURCE_FILES})
-target_link_libraries(ccnx_perf_server ${CCNX_LIBRARIES})
-install(TARGETS ccnx_perf_server RUNTIME DESTINATION bin)
+add_executable(ccnxPerfServer ${CCNX_PERF_SERVER_SOURCE_FILES})
+target_link_libraries(ccnxPerfServer ${CCNX_LIBRARIES})
+install(TARGETS ccnxPerfServer RUNTIME DESTINATION bin)
