@@ -78,9 +78,9 @@ producer(void)
     
     assertNotNull(portal, "Expected a non-null CCNxPortal pointer.");
 
-    CCNxName *listenName = ccnxName_CreateFromURI("lci:/localhost/ping");
-    CCNxName *goodbye = ccnxName_CreateFromURI("lci:/Hello/Goodbye%21");
-    CCNxName *contentName = ccnxName_CreateFromURI("lci:/localhost/ping");
+    CCNxName *listenName = ccnxName_CreateFromCString("lci:/localhost/ping");
+    CCNxName *goodbye = ccnxName_CreateFromCString("lci:/Hello/Goodbye%21");
+    CCNxName *contentName = ccnxName_CreateFromCString("lci:/localhost/ping");
 
     if (ccnxPortal_Listen(portal, listenName, 60 * 60 * 24 * 365, CCNxStackTimeout_Never)) {
         while (true) {

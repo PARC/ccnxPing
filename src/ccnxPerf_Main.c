@@ -186,7 +186,7 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
         if (pings < total_pings) {
             // We want to send an interest ping
             create_name(options,nameBuffer,NAME_BUFFER_SIZE);
-            name = ccnxName_CreateFromURI(nameBuffer);
+            name = ccnxName_CreateFromCString(nameBuffer);
             interest = ccnxInterest_CreateSimple(name);
             message = ccnxMetaMessage_CreateFromInterest(interest);
             ccnxName_Release(&name);
