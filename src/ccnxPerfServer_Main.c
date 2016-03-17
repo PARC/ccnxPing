@@ -78,9 +78,9 @@ producer(void)
     
     assertNotNull(portal, "Expected a non-null CCNxPortal pointer.");
 
-    CCNxName *listenName = ccnxName_CreateFromCString("lci:/localhost/ping");
-    CCNxName *goodbye = ccnxName_CreateFromCString("lci:/Hello/Goodbye%21");
-    CCNxName *contentName = ccnxName_CreateFromCString("lci:/localhost/ping");
+    CCNxName *listenName = ccnxName_CreateFromCString("ccnx:/localhost/ping");
+    CCNxName *goodbye = ccnxName_CreateFromCString("ccnx:/Hello/Goodbye%21");
+    CCNxName *contentName = ccnxName_CreateFromCString("ccnx:/localhost/ping");
 
     if (ccnxPortal_Listen(portal, listenName, 60 * 60 * 24 * 365, CCNxStackTimeout_Never)) {
         while (true) {
@@ -102,14 +102,14 @@ producer(void)
                 int payload_size;
                 size_t interest_counter;
 
-                sscanf(name,"lci:/%[^'/']/%[^'/']/%[^'/']/%u/%lu",
+                sscanf(name,"ccnx:/%[^'/']/%[^'/']/%[^'/']/%u/%lu",
                          prefix,
                          appname,
                          nonce,
                          &payload_size,
                          &interest_counter);
 
-                //printf("Got:  lci:||%s||%s||%s||%u||%lu\n",
+                //printf("Got:  ccnx:||%s||%s||%s||%u||%lu\n",
                 //       prefix,
                 //       appname,
                 //       nonce,

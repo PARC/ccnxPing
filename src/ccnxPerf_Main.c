@@ -67,8 +67,8 @@ typedef struct Perf_Options {
     CCNxPortal *portal;
     enum perf_mode mode;
     int interest_counter;
-    int iterations;
-    uint64_t interval_us;
+    int count;
+    uint64_t interval_ms;
     char * prefix;
     char * service_name;
     perf_stats stats;
@@ -115,7 +115,7 @@ setupConsumerFactory(void)
 }
 
 int create_name(perf_options * options, char * buffer, int bufferSize){
-    snprintf(buffer,bufferSize,"lci:/%s/%s/%x/%u/%06lu",
+    snprintf(buffer,bufferSize,"ccnx:/%s/%s/%x/%u/%06lu",
              options->prefix,
              options->service_name,
              options->nonce,
@@ -242,7 +242,19 @@ int perf_ping(perf_options * options, int total_pings, uint64_t delay_us) {
 }
 
 int help(){
-    printf("print the help here!\n");
+    printf("ccnxPerf -p [ -c count ] [ -s size ] [ -i interval ]\n");
+    printf("ccnxPerf -f [ -c count ] [ -s size ]\n");
+    printf("ccnxPerf -h\n");
+    printf("           CCNx Simple Performance Test\n");
+    printf("         :  You must have ccnxPerfServer running\n");
+    printf("\n");
+    printf("Options  \n");
+    printf("     -h (--help) Show this help message\n");
+    printf("     -p (--ping) ping mode - \n");
+    printf("     -f (--flood) flood mode - send as fast as possible\n");
+    printf("     -c (--count) Number of count to run\n");
+    printf("     -i (--interval) Interval in milliseconds between interests in ping mode\n");
+    printf("     -s (--size) Size of the content objects\n");
     return 0;
 }
 
@@ -256,14 +268,15 @@ int options_parse_commandline(perf_options * options, int argc, char* argv[]){
     static struct option longopts[] = {
             { "ping",       no_argument,        NULL,'p' },
             { "flood",      no_argument,        NULL,'f' },
-            { "iterations", required_argument,  NULL,'n'},
+            { "count",      required_argument,  NULL,'c'},
             { "size",       required_argument,  NULL,'s'},
+            { "interval",   required_argument,  NULL,'i'},
             { "help",       no_argument,        NULL,'h'},
             { NULL,0,NULL,0}
     };
 
     int c;
-    while((c = getopt_long(argc,argv,"phfn:s:",longopts,NULL)) != -1){
+    while((c = getopt_long(argc,argv,"phfc:s:i:",longopts,NULL)) != -1){
         switch(c){
             case 'p':
                 if(options->mode != PERF_MODE_NONE){
@@ -279,8 +292,11 @@ int options_parse_commandline(perf_options * options, int argc, char* argv[]){
                 }
                 options->mode = PERF_MODE_FLOOD;
                 break;
-            case 'n':
-                sscanf(optarg,"%u",&(options->iterations));
+            case 'c':
+                sscanf(optarg,"%u",&(options->count));
+                break;
+            case 'i':
+                sscanf(optarg,"%llu",&(options->interval_ms));
                 break;
             case 's':
                 sscanf(optarg,"%u",&(options->payload_size));
@@ -295,8 +311,8 @@ int options_parse_commandline(perf_options * options, int argc, char* argv[]){
     }
 
     if(options->mode == PERF_MODE_NONE){
-        // set the default mode
-        options->mode = PERF_MODE_ALL;
+	    help();
+		exit(0);
     }
     return 0;
 };
@@ -327,8 +343,8 @@ int data_initialize(perf_options * options){
     options->prefix = "localhost";
     options->service_name = "ping";
     options->receive_timeout_us = RECEIVE_TIMEOUT_US;
-    options->iterations = 10;
-    options->interval_us = 1000000;
+    options->count = 10;
+    options->interval_ms = 1000;
     options->nonce=rand();
     return 0;
 }
@@ -343,11 +359,11 @@ int performance_test_run(perf_options * options){
             stats_print_average(&options->stats);
             break;
         case PERF_MODE_FLOOD:
-            perf_ping(options, options->iterations, 0);
+            perf_ping(options, options->count, 0);
             stats_print_average(&options->stats);
             break;
         case PERF_MODE_PINGPONG:
-            perf_ping(options, options->iterations, options->interval_us);
+            perf_ping(options, options->count, options->interval_ms * 1000);
             stats_print_average(&options->stats);
             break;
         case PERF_MODE_NONE:
