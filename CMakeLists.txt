@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.3)
 project(ccnxPerf)
 
 include( CTest )
-#enable_testing()
 
 set(CCNX_HOME $ENV{CCNX_HOME})
 
@@ -13,20 +12,22 @@ set(CCNX_LIBRARIES longbow longbow-ansiterm parc ccnx_common ccnx_api_portal ccn
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
 set(CCNX_PERF_CLIENT_SOURCE_FILES
-        src/ccnxPerf_Main.c)
+        ccnxPerf_Client.c
+        ccnxPerf_Common.c
+        ccnxPerf_Stats.c)
 
 set(CCNX_PERF_SERVER_SOURCE_FILES
-        src/ccnxPerfServer_Main.c)
+        ccnxPerf_Server.c
+        ccnxPerf_Common.c)
 
 include_directories(${CCNX_HOME}/include)
-include_directories(src)
 
 link_directories(${CCNX_HOME}/lib)
 
-add_executable(ccnxPerf ${CCNX_PERF_CLIENT_SOURCE_FILES})
-target_link_libraries(ccnxPerf ${CCNX_LIBRARIES})
-install(TARGETS ccnxPerf RUNTIME DESTINATION bin)
+add_executable(ccnxPerf_Client ${CCNX_PERF_CLIENT_SOURCE_FILES})
+target_link_libraries(ccnxPerf_Client ${CCNX_LIBRARIES})
+install(TARGETS ccnxPerf_Client RUNTIME DESTINATION bin)
 
-add_executable(ccnxPerfServer ${CCNX_PERF_SERVER_SOURCE_FILES})
-target_link_libraries(ccnxPerfServer ${CCNX_LIBRARIES})
-install(TARGETS ccnxPerfServer RUNTIME DESTINATION bin)
+add_executable(ccnxPerf_Server ${CCNX_PERF_SERVER_SOURCE_FILES})
+target_link_libraries(ccnxPerf_Server ${CCNX_LIBRARIES})
+install(TARGETS ccnxPerf_Server RUNTIME DESTINATION bin)
