@@ -125,6 +125,9 @@ size_t ccnxPerfStats_RecordResponse(CCNxPerfStats *stats, CCNxName *name, uint64
  * Display the average statistics stored in this `CCNxPerfStats` instance.
  *
  * @param [in] stats The `CCNxPerfStats` instance from which to draw the average data.
+ *
+ * @retval true If the stats were displayed correctly
+ * @retval false Otherwise
  */
 bool ccnxPerfStats_Display(CCNxPerfStats *stats);
 #endif // ccnxPerf_Stats_h

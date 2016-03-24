@@ -143,7 +143,7 @@ ccnxPerfStats_RecordResponse(CCNxPerfStats *stats, CCNxName *nameResponse, uint6
     return 0;
 }
 
-void
+bool
 ccnxPerfStats_Display(CCNxPerfStats *stats)
 {
     if (stats->totalReceived > 0) {
