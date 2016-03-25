@@ -38,7 +38,7 @@
 #include <parc/security/parc_Pkcs12KeyStore.h>
 #include <parc/security/parc_IdentityFile.h>
 
-const size_t ccnxPerf_DefaultReceiveTimeoutInUs = 1000000;
+const size_t ccnxPerf_DefaultReceiveTimeoutInUs = 1000000; // 1 second
 const size_t ccnxPerf_DefaultPayloadSize = 4096;
 const size_t mediumNumberOfPings = 100;
 const size_t smallNumberOfPings = 10;

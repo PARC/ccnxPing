@@ -146,6 +146,18 @@ _ccnxPerfClient_CreateNextName(CCNxPerfClient *client)
 }
 
 /**
+ * Convert a timeval struct to a single microsecond count.
+ */
+static uint64_t
+_ccnxPerfClient_CurrentTimeInUs(PARCClock *clock)
+{
+    struct timeval currentTimeVal;
+    parcClock_GetTimeval(clock, &currentTimeVal);
+    uint64_t microseconds = currentTimeVal.tv_sec * 1000000 + currentTimeVal.tv_usec;
+    return microseconds;
+}
+
+/**
  * Run a single ping test.
  */
 static void
@@ -158,7 +170,7 @@ _ccnxPerfClient_RunPing(CCNxPerfClient *client, size_t totalPings, uint64_t dela
 
     for (int pings = 0; pings <= totalPings; pings++) {
         uint64_t nextPacketSendTime = 0;
-        uint64_t currentTime = 0;
+        uint64_t currentTimeInUs = 0;
 
         // Continue to send ping messages until we've reached the capacity
         if (pings < totalPings && (!checkOustanding || (checkOustanding && outstanding < client->numberOfOutstanding))) {
@@ -167,30 +179,30 @@ _ccnxPerfClient_RunPing(CCNxPerfClient *client, size_t totalPings, uint64_t dela
             CCNxMetaMessage *message = ccnxMetaMessage_CreateFromInterest(interest);
 
             if (ccnxPortal_Send(client->portal, message, CCNxStackTimeout_Never)) {
-                currentTime = parcClock_GetTime(clock);
-                nextPacketSendTime = currentTime + delayInUs;
+                currentTimeInUs = _ccnxPerfClient_CurrentTimeInUs(clock);
+                nextPacketSendTime = currentTimeInUs + delayInUs;
 
-                ccnxPerfStats_RecordRequest(client->stats, name, currentTime);
+                ccnxPerfStats_RecordRequest(client->stats, name, currentTimeInUs);
             }
 
             outstanding++;
             ccnxName_Release(&name);
         } else {
             // We're done with pings, so let's wait to see if we have any stragglers
-            currentTime = parcClock_GetTime(clock);
-            nextPacketSendTime = currentTime + client->receiveTimeoutInUs;
+            currentTimeInUs = _ccnxPerfClient_CurrentTimeInUs(clock);
+            nextPacketSendTime = currentTimeInUs + client->receiveTimeoutInUs;
         }
 
         // Now wait for the responses and record their times
-        uint64_t receiveDelay = nextPacketSendTime - currentTime;
+        uint64_t receiveDelay = nextPacketSendTime - currentTimeInUs;
         CCNxMetaMessage *response = ccnxPortal_Receive(client->portal, &receiveDelay);
         while (response != NULL && (!checkOustanding || (checkOustanding && outstanding < client->numberOfOutstanding))) {
-            uint64_t currentTime = parcClock_GetTime(clock);
+            uint64_t currentTimeInUs = _ccnxPerfClient_CurrentTimeInUs(clock);
             if (ccnxMetaMessage_IsContentObject(response)) {
                 CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
 
                 CCNxName *responseName = ccnxContentObject_GetName(contentObject);
-                size_t delta = ccnxPerfStats_RecordResponse(client->stats, responseName, currentTime, response);
+                size_t delta = ccnxPerfStats_RecordResponse(client->stats, responseName, currentTimeInUs, response);
 
                 // Only display output if we're in ping mode
                 if (client->mode == CCNxPerfClientMode_PingPong) {
@@ -203,7 +215,7 @@ _ccnxPerfClient_RunPing(CCNxPerfClient *client, size_t totalPings, uint64_t dela
             ccnxMetaMessage_Release(&response);
 
             if (pings < totalPings) {
-                receiveDelay = nextPacketSendTime - currentTime;
+                receiveDelay = nextPacketSendTime - currentTimeInUs;
             } else {
                 receiveDelay = client->receiveTimeoutInUs;
             }
