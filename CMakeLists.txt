@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.3)
-project(ccnxPerf)
+project(ccnxPing)
 
 include( CTest )
 
@@ -11,23 +11,23 @@ set(CCNX_LIBRARIES longbow longbow-ansiterm parc ccnx_common ccnx_api_portal ccn
 
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
-set(CCNX_PERF_CLIENT_SOURCE_FILES
-        ccnxPerf_Client.c
-        ccnxPerf_Common.c
-        ccnxPerf_Stats.c)
+set(CCNX_PING_CLIENT_SOURCE_FILES
+        ccnxPing_Client.c
+        ccnxPing_Common.c
+        ccnxPing_Stats.c)
 
-set(CCNX_PERF_SERVER_SOURCE_FILES
-        ccnxPerf_Server.c
-        ccnxPerf_Common.c)
+set(CCNX_PING_SERVER_SOURCE_FILES
+        ccnxPing_Server.c
+        ccnxPing_Common.c)
 
 include_directories(${CCNX_HOME}/include)
 
 link_directories(${CCNX_HOME}/lib)
 
-add_executable(ccnxPerf_Client ${CCNX_PERF_CLIENT_SOURCE_FILES})
-target_link_libraries(ccnxPerf_Client ${CCNX_LIBRARIES})
-install(TARGETS ccnxPerf_Client RUNTIME DESTINATION bin)
+add_executable(ccnxPing_Client ${CCNX_PING_CLIENT_SOURCE_FILES})
+target_link_libraries(ccnxPing_Client ${CCNX_LIBRARIES})
+install(TARGETS ccnxPing_Client RUNTIME DESTINATION bin)
 
-add_executable(ccnxPerf_Server ${CCNX_PERF_SERVER_SOURCE_FILES})
-target_link_libraries(ccnxPerf_Server ${CCNX_LIBRARIES})
-install(TARGETS ccnxPerf_Server RUNTIME DESTINATION bin)
+add_executable(ccnxPing_Server ${CCNX_PING_SERVER_SOURCE_FILES})
+target_link_libraries(ccnxPing_Server ${CCNX_LIBRARIES})
+install(TARGETS ccnxPing_Server RUNTIME DESTINATION bin)
