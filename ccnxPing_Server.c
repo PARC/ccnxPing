@@ -44,15 +44,15 @@
 #include <ccnx/api/ccnx_Portal/ccnx_Portal.h>
 #include <ccnx/api/ccnx_Portal/ccnx_PortalRTA.h>
 
-#include "ccnxPerf_Common.h"
+#include "ccnxPing_Common.h"
 
-typedef struct ccnx_perf_server {
+typedef struct ccnx_ping_server {
     CCNxPortal *portal;
     CCNxName *prefix;
     size_t payloadSize;
 
-    uint8_t generalPayload[ccnxPerf_MaxPayloadSize];
-} CCNxPerfServer;
+    uint8_t generalPayload[ccnxPing_MaxPayloadSize];
+} CCNxPingServer;
 
 /**
  * Create a new CCNxPortalFactory instance using a randomly generated identity saved to
@@ -67,41 +67,41 @@ _setupServerPortalFactory(void)
     const char *keystorePassword = "keystore_password";
     const char *subjectName = "server";
 
-    return ccnxPerfCommon_SetupPortalFactory(keystoreName, keystorePassword, subjectName);
+    return ccnxPingCommon_SetupPortalFactory(keystoreName, keystorePassword, subjectName);
 }
 
 /**
- * Release the references held by the `CCNxPerfClient`.
+ * Release the references held by the `CCNxPingClient`.
  */
 static bool
-_ccnxPerfServer_Destructor(CCNxPerfServer **serverPtr)
+_ccnxPingServer_Destructor(CCNxPingServer **serverPtr)
 {
-    CCNxPerfServer *server = *serverPtr;
+    CCNxPingServer *server = *serverPtr;
     ccnxPortal_Release(&(server->portal));
     ccnxName_Release(&(server->prefix));
     return true;
 }
 
-parcObject_Override(CCNxPerfServer, PARCObject,
-                    .destructor = (PARCObjectDestructor *) _ccnxPerfServer_Destructor);
+parcObject_Override(CCNxPingServer, PARCObject,
+                    .destructor = (PARCObjectDestructor *) _ccnxPingServer_Destructor);
 
-parcObject_ImplementAcquire(ccnxPerfServer, CCNxPerfServer);
-parcObject_ImplementRelease(ccnxPerfServer, CCNxPerfServer);
+parcObject_ImplementAcquire(ccnxPingServer, CCNxPingServer);
+parcObject_ImplementRelease(ccnxPingServer, CCNxPingServer);
 
 /**
- * Create a new empty `CCNxPerfServer` instance.
+ * Create a new empty `CCNxPingServer` instance.
  */
-static CCNxPerfServer *
-ccnxPerfServer_Create(void)
+static CCNxPingServer *
+ccnxPingServer_Create(void)
 {
-    CCNxPerfServer *server = parcObject_CreateInstance(CCNxPerfServer);
+    CCNxPingServer *server = parcObject_CreateInstance(CCNxPingServer);
 
     CCNxPortalFactory *factory = _setupServerPortalFactory();
     server->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
     ccnxPortalFactory_Release(&factory);
 
-    server->prefix = ccnxName_CreateFromCString(ccnxPerf_DefaultPrefix);
-    server->payloadSize = ccnxPerf_DefaultPayloadSize;
+    server->prefix = ccnxName_CreateFromCString(ccnxPing_DefaultPrefix);
+    server->payloadSize = ccnxPing_DefaultPayloadSize;
 
     return server;
 }
@@ -110,17 +110,17 @@ ccnxPerfServer_Create(void)
  * Create a `PARCBuffer` payload of the server-configured size.
  */
 PARCBuffer *
-_ccnxPerfServer_MakePayload(CCNxPerfServer *server)
+_ccnxPingServer_MakePayload(CCNxPingServer *server)
 {
-    PARCBuffer *payload = parcBuffer_Wrap(server->generalPayload, ccnxPerf_MaxPayloadSize, 0, server->payloadSize);
+    PARCBuffer *payload = parcBuffer_Wrap(server->generalPayload, ccnxPing_MaxPayloadSize, 0, server->payloadSize);
     return payload;
 }
 
 /**
- * Run the `CCNxPerfServer` indefinitely.
+ * Run the `CCNxPingServer` indefinitely.
  */
 static void
-_ccnxPerfServer_Run(CCNxPerfServer *server)
+_ccnxPingServer_Run(CCNxPingServer *server)
 {
     size_t yearInSeconds = 60 * 60 * 24 * 365;
     if (ccnxPortal_Listen(server->portal, server->prefix, yearInSeconds, CCNxStackTimeout_Never)) {
@@ -136,11 +136,11 @@ _ccnxPerfServer_Run(CCNxPerfServer *server)
             if (interest != NULL) {
                 CCNxName *interestName = ccnxInterest_GetName(interest);
 
-                PARCBuffer *payload = _ccnxPerfServer_MakePayload(server);
+                PARCBuffer *payload = _ccnxPingServer_MakePayload(server);
 
                 CCNxContentObject *contentObject = ccnxContentObject_CreateWithNameAndPayload(interestName, payload);
                 CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(contentObject);
-                
+
                 if (ccnxPortal_Send(server->portal, message, CCNxStackTimeout_Never) == false) {
                     fprintf(stderr, "ccnxPortal_Send failed: %d\n", ccnxPortal_GetError(server->portal));
                 }
@@ -162,10 +162,10 @@ _displayUsage(char *progName)
 {
     printf("%s [-l locator] [-s size] \n", progName);
     printf("%s -h\n", progName);
-    printf("           CCNx Simple Performance Test\n");
+    printf("           CCNx Simple Pingormance Test\n");
     printf("\n");
     printf("Example:\n");
-    printf("    ccnxPerf_Server -l ccnx:/some/prefix -s 4096");
+    printf("    ccnxPing_Server -l ccnx:/some/prefix -s 4096");
     printf("\n");
     printf("Options  \n");
     printf("     -h (--help) Show this help message\n");
@@ -177,7 +177,7 @@ _displayUsage(char *progName)
  * Parse the command lines to initialize the state of the
  */
 static bool
-_ccnxPerfServer_ParseCommandline(CCNxPerfServer *server, int argc, char *argv[argc])
+_ccnxPingServer_ParseCommandline(CCNxPingServer *server, int argc, char *argv[argc])
 {
     static struct option longopts[] = {
         { "locator", required_argument, NULL, 'l' },
@@ -211,14 +211,14 @@ main(int argc, char *argv[argc])
 {
     parcSecurity_Init();
 
-    CCNxPerfServer *server = ccnxPerfServer_Create();
+    CCNxPingServer *server = ccnxPingServer_Create();
 
-    bool runServer = _ccnxPerfServer_ParseCommandline(server, argc, argv);
+    bool runServer = _ccnxPingServer_ParseCommandline(server, argc, argv);
     if (runServer) {
-        _ccnxPerfServer_Run(server);
+        _ccnxPingServer_Run(server);
     }
 
-    ccnxPerfServer_Release(&server);
+    ccnxPingServer_Release(&server);
 
     parcSecurity_Fini();
 

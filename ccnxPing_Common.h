@@ -29,8 +29,8 @@
  * @copyright 2016, Xerox Corporation (Xerox)and Palo Alto Research Center (PARC).  All rights reserved.
  */
 
-#ifndef ccnxPerfCommon_h
-#define ccnxPerfCommon_h
+#ifndef ccnxPingCommon_h
+#define ccnxPingCommon_h
 
 #include <stdint.h>
 
@@ -39,23 +39,23 @@
 /**
  * The `CCNxName` prefix for the server.
  */
-#define ccnxPerf_DefaultPrefix "ccnx:/localhost"
+#define ccnxPing_DefaultPrefix "ccnx:/localhost"
 
 /**
  * The default client receive timeout (in microseconds).
  */
-extern const size_t ccnxPerf_DefaultReceiveTimeoutInUs;
+extern const size_t ccnxPing_DefaultReceiveTimeoutInUs;
 
 /**
  * The default size of a content object payload.
  */
-extern const size_t ccnxPerf_DefaultPayloadSize;
+extern const size_t ccnxPing_DefaultPayloadSize;
 
 /**
  * The maximum size of a content object payload.
  * 64KB is the limit imposed by the packet structure
  */
-#define ccnxPerf_MaxPayloadSize 64000
+#define ccnxPing_MaxPayloadSize 64000
 
 /**
  * A default "medium" number of messages to send.
@@ -78,7 +78,7 @@ extern const size_t smallNumberOfPings;
  *
  * @return A new instance of a CCNxPortalFactory initialized with a randomly created identity.
  */
-CCNxPortalFactory *ccnxPerfCommon_SetupPortalFactory(const char *keystoreName,
+CCNxPortalFactory *ccnxPingCommon_SetupPortalFactory(const char *keystoreName,
                                                      const char *keystorePassword,
                                                      const char *subjectName);
-#endif // ccnxPerfCommon_h.h
+#endif // ccnxPingCommon_h.h
