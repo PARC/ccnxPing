@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.3)
 project(ccnxPing)
-
 include( CTest )
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(CCNX_HOME $ENV{CCNX_HOME})
 
