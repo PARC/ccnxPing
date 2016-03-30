@@ -43,20 +43,20 @@
 #include <parc/security/parc_Security.h>
 #include <parc/security/parc_IdentityFile.h>
 
-#include "ccnxPerf_Stats.h"
-#include "ccnxPerf_Common.h"
+#include "ccnxPing_Stats.h"
+#include "ccnxPing_Common.h"
 
 typedef enum {
-    CCNxPerfClientMode_None = 0,
-    CCNxPerfClientMode_Flood,
-    CCNxPerfClientMode_PingPong,
-    CCNxPerfClientMode_All
-} CCNxPerfClientMode;
+    CCNxPingClientMode_None = 0,
+    CCNxPingClientMode_Flood,
+    CCNxPingClientMode_PingPong,
+    CCNxPingClientMode_All
+} CCNxPingClientMode;
 
-typedef struct ccnx_perf_client {
+typedef struct ccnx_Ping_client {
     CCNxPortal *portal;
-    CCNxPerfStats *stats;
-    CCNxPerfClientMode mode;
+    CCNxPingStats *stats;
+    CCNxPingClientMode mode;
 
     CCNxName *prefix;
 
@@ -67,7 +67,7 @@ typedef struct ccnx_perf_client {
     uint64_t intervalInMs;
     int payloadSize;
     int nonce;
-} CCNxPerfClient;
+} CCNxPingClient;
 
 /**
  * Create a new CCNxPortalFactory instance using a randomly generated identity saved to
@@ -82,43 +82,43 @@ _setupClientPortalFactory(void)
     const char *keystorePassword = "keystore_password";
     const char *subjectName = "client";
 
-    return ccnxPerfCommon_SetupPortalFactory(keystoreName, keystorePassword, subjectName);
+    return ccnxPingCommon_SetupPortalFactory(keystoreName, keystorePassword, subjectName);
 }
 
 /**
- * Release the references held by the `CCNxPerfClient`.
+ * Release the references held by the `CCNxPingClient`.
  */
 static bool
-_ccnxPerfClient_Destructor(CCNxPerfClient **clientPtr)
+_ccnxPingClient_Destructor(CCNxPingClient **clientPtr)
 {
-    CCNxPerfClient *client = *clientPtr;
+    CCNxPingClient *client = *clientPtr;
     ccnxPortal_Release(&(client->portal));
     ccnxName_Release(&(client->prefix));
     return true;
 }
 
-parcObject_Override(CCNxPerfClient, PARCObject,
-                    .destructor = (PARCObjectDestructor *) _ccnxPerfClient_Destructor);
+parcObject_Override(CCNxPingClient, PARCObject,
+                    .destructor = (PARCObjectDestructor *) _ccnxPingClient_Destructor);
 
-parcObject_ImplementAcquire(ccnxPerfClient, CCNxPerfClient);
-parcObject_ImplementRelease(ccnxPerfClient, CCNxPerfClient);
+parcObject_ImplementAcquire(ccnxPingClient, CCNxPingClient);
+parcObject_ImplementRelease(ccnxPingClient, CCNxPingClient);
 
 /**
- * Create a new empty `CCNxPerfClient` instance.
+ * Create a new empty `CCNxPingClient` instance.
  */
-static CCNxPerfClient *
-ccnxPerfClient_Create(void)
+static CCNxPingClient *
+ccnxPingClient_Create(void)
 {
-    CCNxPerfClient *client = parcObject_CreateInstance(CCNxPerfClient);
+    CCNxPingClient *client = parcObject_CreateInstance(CCNxPingClient);
 
     CCNxPortalFactory *factory = _setupClientPortalFactory();
     client->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
     ccnxPortalFactory_Release(&factory);
 
-    client->stats = ccnxPerfStats_Create();
+    client->stats = ccnxPingStats_Create();
     client->interestCounter = 100;
-    client->prefix = ccnxName_CreateFromCString(ccnxPerf_DefaultPrefix);
-    client->receiveTimeoutInUs = ccnxPerf_DefaultReceiveTimeoutInUs;
+    client->prefix = ccnxName_CreateFromCString(ccnxPing_DefaultPrefix);
+    client->receiveTimeoutInUs = ccnxPing_DefaultReceiveTimeoutInUs;
     client->count = 10;
     client->intervalInMs = 1000;
     client->nonce = rand();
@@ -132,7 +132,7 @@ ccnxPerfClient_Create(void)
  * for the client.
  */
 static CCNxName *
-_ccnxPerfClient_CreateNextName(CCNxPerfClient *client)
+_ccnxPingClient_CreateNextName(CCNxPingClient *client)
 {
     char *suffixBuffer = NULL;
     asprintf(&suffixBuffer, "/%x/%u/%06lu",
@@ -146,10 +146,22 @@ _ccnxPerfClient_CreateNextName(CCNxPerfClient *client)
 }
 
 /**
+ * Convert a timeval struct to a single microsecond count.
+ */
+static uint64_t
+_ccnxPingClient_CurrentTimeInUs(PARCClock *clock)
+{
+    struct timeval currentTimeVal;
+    parcClock_GetTimeval(clock, &currentTimeVal);
+    uint64_t microseconds = currentTimeVal.tv_sec * 1000000 + currentTimeVal.tv_usec;
+    return microseconds;
+}
+
+/**
  * Run a single ping test.
  */
 static void
-_ccnxPerfClient_RunPing(CCNxPerfClient *client, size_t totalPings, uint64_t delayInUs)
+_ccnxPingClient_RunPing(CCNxPingClient *client, size_t totalPings, uint64_t delayInUs)
 {
     PARCClock *clock = parcClock_Wallclock();
 
@@ -158,42 +170,42 @@ _ccnxPerfClient_RunPing(CCNxPerfClient *client, size_t totalPings, uint64_t dela
 
     for (int pings = 0; pings <= totalPings; pings++) {
         uint64_t nextPacketSendTime = 0;
-        uint64_t currentTime = 0;
+        uint64_t currentTimeInUs = 0;
 
         // Continue to send ping messages until we've reached the capacity
         if (pings < totalPings && (!checkOustanding || (checkOustanding && outstanding < client->numberOfOutstanding))) {
-            CCNxName *name = _ccnxPerfClient_CreateNextName(client);
+            CCNxName *name = _ccnxPingClient_CreateNextName(client);
             CCNxInterest *interest = ccnxInterest_CreateSimple(name);
             CCNxMetaMessage *message = ccnxMetaMessage_CreateFromInterest(interest);
 
             if (ccnxPortal_Send(client->portal, message, CCNxStackTimeout_Never)) {
-                currentTime = parcClock_GetTime(clock);
-                nextPacketSendTime = currentTime + delayInUs;
+                currentTimeInUs = _ccnxPingClient_CurrentTimeInUs(clock);
+                nextPacketSendTime = currentTimeInUs + delayInUs;
 
-                ccnxPerfStats_RecordRequest(client->stats, name, currentTime);
+                ccnxPingStats_RecordRequest(client->stats, name, currentTimeInUs);
             }
 
             outstanding++;
             ccnxName_Release(&name);
         } else {
             // We're done with pings, so let's wait to see if we have any stragglers
-            currentTime = parcClock_GetTime(clock);
-            nextPacketSendTime = currentTime + client->receiveTimeoutInUs;
+            currentTimeInUs = _ccnxPingClient_CurrentTimeInUs(clock);
+            nextPacketSendTime = currentTimeInUs + client->receiveTimeoutInUs;
         }
 
         // Now wait for the responses and record their times
-        uint64_t receiveDelay = nextPacketSendTime - currentTime;
+        uint64_t receiveDelay = nextPacketSendTime - currentTimeInUs;
         CCNxMetaMessage *response = ccnxPortal_Receive(client->portal, &receiveDelay);
         while (response != NULL && (!checkOustanding || (checkOustanding && outstanding < client->numberOfOutstanding))) {
-            uint64_t currentTime = parcClock_GetTime(clock);
+            uint64_t currentTimeInUs = _ccnxPingClient_CurrentTimeInUs(clock);
             if (ccnxMetaMessage_IsContentObject(response)) {
                 CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
 
                 CCNxName *responseName = ccnxContentObject_GetName(contentObject);
-                size_t delta = ccnxPerfStats_RecordResponse(client->stats, responseName, currentTime, response);
+                size_t delta = ccnxPingStats_RecordResponse(client->stats, responseName, currentTimeInUs, response);
 
                 // Only display output if we're in ping mode
-                if (client->mode == CCNxPerfClientMode_PingPong) {
+                if (client->mode == CCNxPingClientMode_PingPong) {
                     size_t contentSize = parcBuffer_Remaining(ccnxContentObject_GetPayload(contentObject));
                     char *nameString = ccnxName_ToString(responseName);
                     printf("%zu bytes from %s: time=%zu us\n", contentSize, nameString, delta);
@@ -203,7 +215,7 @@ _ccnxPerfClient_RunPing(CCNxPerfClient *client, size_t totalPings, uint64_t dela
             ccnxMetaMessage_Release(&response);
 
             if (pings < totalPings) {
-                receiveDelay = nextPacketSendTime - currentTime;
+                receiveDelay = nextPacketSendTime - currentTimeInUs;
             } else {
                 receiveDelay = client->receiveTimeoutInUs;
             }
@@ -223,11 +235,11 @@ _displayUsage(char *progName)
     printf("%s -p [ -c count ] [ -s size ] [ -i interval ]\n", progName);
     printf("%s -f [ -c count ] [ -s size ]\n", progName);
     printf("%s -h\n", progName);
-    printf("                CCNx Simple Performance Test\n");
-    printf("                :  You must have ccnxPerfServer running\n");
+    printf("                CCNx Simple Pingormance Test\n");
+    printf("                :  You must have ccnxPingServer running\n");
     printf("\n");
     printf("Example:\n");
-    printf("    ccnxPerf_Client -l ccnx:/some/prefix -c 100 -f");
+    printf("    ccnxPing_Client -l ccnx:/some/prefix -c 100 -f");
     printf("\n");
     printf("Options  \n");
     printf("     -h (--help) Show this help message\n");
@@ -243,7 +255,7 @@ _displayUsage(char *progName)
  * Parse the command lines to initialize the state of the
  */
 static bool
-_ccnxPerfClient_ParseCommandline(CCNxPerfClient *client, int argc, char *argv[argc])
+_ccnxPingClient_ParseCommandline(CCNxPingClient *client, int argc, char *argv[argc])
 {
     static struct option longopts[] = {
         { "ping",        no_argument,       NULL, 'p' },
@@ -261,16 +273,16 @@ _ccnxPerfClient_ParseCommandline(CCNxPerfClient *client, int argc, char *argv[ar
     while ((c = getopt_long(argc, argv, "phfc:s:i:l:o:", longopts, NULL)) != -1) {
         switch (c) {
             case 'p':
-                if (client->mode != CCNxPerfClientMode_None) {
+                if (client->mode != CCNxPingClientMode_None) {
                     return false;
                 }
-                client->mode = CCNxPerfClientMode_PingPong;
+                client->mode = CCNxPingClientMode_PingPong;
                 break;
             case 'f':
-                if (client->mode != CCNxPerfClientMode_None) {
+                if (client->mode != CCNxPingClientMode_None) {
                     return false;
                 }
-                client->mode = CCNxPerfClientMode_Flood;
+                client->mode = CCNxPingClientMode_Flood;
                 break;
             case 'c':
                 sscanf(optarg, "%u", &(client->count));
@@ -295,7 +307,7 @@ _ccnxPerfClient_ParseCommandline(CCNxPerfClient *client, int argc, char *argv[ar
         }
     }
 
-    if (client->mode == CCNxPerfClientMode_None) {
+    if (client->mode == CCNxPingClientMode_None) {
         _displayUsage(argv[0]);
         return false;
     }
@@ -304,37 +316,37 @@ _ccnxPerfClient_ParseCommandline(CCNxPerfClient *client, int argc, char *argv[ar
 };
 
 static void
-_ccnxPerfClient_DisplayStatistics(CCNxPerfClient *client)
+_ccnxPingClient_DisplayStatistics(CCNxPingClient *client)
 {
-    bool ableToCompute = ccnxPerfStats_Display(client->stats);
+    bool ableToCompute = ccnxPingStats_Display(client->stats);
     if (!ableToCompute) {
         parcDisplayIndented_PrintLine(0, "No packets were received. Check to make sure the client and server are configured correctly and that the forwarder is running.\n");
     }
 }
 
 static void
-_ccnxPerfClient_RunPerformanceTest(CCNxPerfClient *client)
+_ccnxPingClient_RunPingormanceTest(CCNxPingClient *client)
 {
     switch (client->mode) {
-        case CCNxPerfClientMode_All:
-            _ccnxPerfClient_RunPing(client, mediumNumberOfPings, 0);
-            _ccnxPerfClient_DisplayStatistics(client);
+        case CCNxPingClientMode_All:
+            _ccnxPingClient_RunPing(client, mediumNumberOfPings, 0);
+            _ccnxPingClient_DisplayStatistics(client);
 
-            ccnxPerfStats_Release(&client->stats);
-            client->stats = ccnxPerfStats_Create();
+            ccnxPingStats_Release(&client->stats);
+            client->stats = ccnxPingStats_Create();
 
-            _ccnxPerfClient_RunPing(client, smallNumberOfPings, ccnxPerf_DefaultReceiveTimeoutInUs);
-            _ccnxPerfClient_DisplayStatistics(client);
+            _ccnxPingClient_RunPing(client, smallNumberOfPings, ccnxPing_DefaultReceiveTimeoutInUs);
+            _ccnxPingClient_DisplayStatistics(client);
             break;
-        case CCNxPerfClientMode_Flood:
-            _ccnxPerfClient_RunPing(client, client->count, 0);
-            _ccnxPerfClient_DisplayStatistics(client);
+        case CCNxPingClientMode_Flood:
+            _ccnxPingClient_RunPing(client, client->count, 0);
+            _ccnxPingClient_DisplayStatistics(client);
             break;
-        case CCNxPerfClientMode_PingPong:
-            _ccnxPerfClient_RunPing(client, client->count, client->intervalInMs * 1000);
-            _ccnxPerfClient_DisplayStatistics(client);
+        case CCNxPingClientMode_PingPong:
+            _ccnxPingClient_RunPing(client, client->count, client->intervalInMs * 1000);
+            _ccnxPingClient_DisplayStatistics(client);
             break;
-        case CCNxPerfClientMode_None:
+        case CCNxPingClientMode_None:
         default:
             fprintf(stderr, "Error, unknown mode");
             break;
@@ -346,14 +358,14 @@ main(int argc, char *argv[argc])
 {
     parcSecurity_Init();
 
-    CCNxPerfClient *client = ccnxPerfClient_Create();
+    CCNxPingClient *client = ccnxPingClient_Create();
 
-    bool runPerf = _ccnxPerfClient_ParseCommandline(client, argc, argv);
-    if (runPerf) {
-        _ccnxPerfClient_RunPerformanceTest(client);
+    bool runPing = _ccnxPingClient_ParseCommandline(client, argc, argv);
+    if (runPing) {
+        _ccnxPingClient_RunPingormanceTest(client);
     }
 
-    ccnxPerfClient_Release(&client);
+    ccnxPingClient_Release(&client);
 
     parcSecurity_Fini();
 

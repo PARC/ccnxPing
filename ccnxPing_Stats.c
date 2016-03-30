@@ -37,29 +37,29 @@
 #include <parc/algol/parc_Object.h>
 #include <parc/algol/parc_DisplayIndented.h>
 
-#include "ccnxPerf_Stats.h"
+#include "ccnxPing_Stats.h"
 
-typedef struct perf_stats_entry {
+typedef struct ping_stats_entry {
     uint64_t sendTimeInUs;
     uint64_t receivedTimeInUs;
     uint64_t rtt;
     size_t size;
     CCNxName *nameSent;
     CCNxMetaMessage *message;
-} CCNxPerfStatsEntry;
+} CCNxPingStatsEntry;
 
-typedef struct perf_stats {
+typedef struct ping_stats {
     uint64_t totalRtt;
     size_t totalReceived;
     size_t totalSent;
 
     PARCHashMap *pings;
-} CCNxPerfStats;
+} CCNxPingStats;
 
 static bool
-_ccnxPerfStatsEntry_Destructor(CCNxPerfStatsEntry **statsPtr)
+_ccnxPingStatsEntry_Destructor(CCNxPingStatsEntry **statsPtr)
 {
-    CCNxPerfStatsEntry *entry = *statsPtr;
+    CCNxPingStatsEntry *entry = *statsPtr;
     ccnxName_Release(&entry->nameSent);
     if (entry->message) {
         ccnxMetaMessage_Release(&entry->message);
@@ -68,35 +68,35 @@ _ccnxPerfStatsEntry_Destructor(CCNxPerfStatsEntry **statsPtr)
 }
 
 static bool
-_ccnxPerfStats_Destructor(CCNxPerfStats **statsPtr)
+_ccnxPingStats_Destructor(CCNxPingStats **statsPtr)
 {
-    CCNxPerfStats *stats = *statsPtr;
+    CCNxPingStats *stats = *statsPtr;
     parcHashMap_Release(&stats->pings);
     return true;
 }
 
-parcObject_Override(CCNxPerfStatsEntry, PARCObject,
-                    .destructor = (PARCObjectDestructor *) _ccnxPerfStatsEntry_Destructor);
+parcObject_Override(CCNxPingStatsEntry, PARCObject,
+                    .destructor = (PARCObjectDestructor *) _ccnxPingStatsEntry_Destructor);
 
-parcObject_ImplementAcquire(ccnxPerfStatsEntry, CCNxPerfStatsEntry);
-parcObject_ImplementRelease(ccnxPerfStatsEntry, CCNxPerfStatsEntry);
+parcObject_ImplementAcquire(ccnxPingStatsEntry, CCNxPingStatsEntry);
+parcObject_ImplementRelease(ccnxPingStatsEntry, CCNxPingStatsEntry);
 
-CCNxPerfStatsEntry *
-ccnxPerfStatsEntry_Create()
+CCNxPingStatsEntry *
+ccnxPingStatsEntry_Create()
 {
-    return parcObject_CreateInstance(CCNxPerfStatsEntry);
+    return parcObject_CreateInstance(CCNxPingStatsEntry);
 }
 
-parcObject_Override(CCNxPerfStats, PARCObject,
-                    .destructor = (PARCObjectDestructor *) _ccnxPerfStats_Destructor);
+parcObject_Override(CCNxPingStats, PARCObject,
+                    .destructor = (PARCObjectDestructor *) _ccnxPingStats_Destructor);
 
-parcObject_ImplementAcquire(ccnxPerfStats, CCNxPerfStats);
-parcObject_ImplementRelease(ccnxPerfStats, CCNxPerfStats);
+parcObject_ImplementAcquire(ccnxPingStats, CCNxPingStats);
+parcObject_ImplementRelease(ccnxPingStats, CCNxPingStats);
 
-CCNxPerfStats *
-ccnxPerfStats_Create(void)
+CCNxPingStats *
+ccnxPingStats_Create(void)
 {
-    CCNxPerfStats *stats = parcObject_CreateInstance(CCNxPerfStats);
+    CCNxPingStats *stats = parcObject_CreateInstance(CCNxPingStats);
 
     stats->pings = parcHashMap_Create();
     stats->totalSent = 0;
@@ -107,9 +107,9 @@ ccnxPerfStats_Create(void)
 }
 
 void
-ccnxPerfStats_RecordRequest(CCNxPerfStats *stats, CCNxName *name, uint64_t currentTime)
+ccnxPingStats_RecordRequest(CCNxPingStats *stats, CCNxName *name, uint64_t currentTime)
 {
-    CCNxPerfStatsEntry *entry = ccnxPerfStatsEntry_Create();
+    CCNxPingStatsEntry *entry = ccnxPingStatsEntry_Create();
 
     entry->nameSent = ccnxName_Acquire(name);
     entry->message = NULL;
@@ -121,10 +121,10 @@ ccnxPerfStats_RecordRequest(CCNxPerfStats *stats, CCNxName *name, uint64_t curre
 }
 
 size_t
-ccnxPerfStats_RecordResponse(CCNxPerfStats *stats, CCNxName *nameResponse, uint64_t currentTime, CCNxMetaMessage *message)
+ccnxPingStats_RecordResponse(CCNxPingStats *stats, CCNxName *nameResponse, uint64_t currentTime, CCNxMetaMessage *message)
 {
     size_t pingsReceived = stats->totalReceived + 1;
-    CCNxPerfStatsEntry *entry = (CCNxPerfStatsEntry *) parcHashMap_Get(stats->pings, nameResponse);
+    CCNxPingStatsEntry *entry = (CCNxPingStatsEntry *) parcHashMap_Get(stats->pings, nameResponse);
 
     if (entry != NULL) {
         stats->totalReceived++;
@@ -143,8 +143,8 @@ ccnxPerfStats_RecordResponse(CCNxPerfStats *stats, CCNxName *nameResponse, uint6
     return 0;
 }
 
-void
-ccnxPerfStats_Display(CCNxPerfStats *stats)
+bool
+ccnxPingStats_Display(CCNxPingStats *stats)
 {
     if (stats->totalReceived > 0) {
         parcDisplayIndented_PrintLine(0, "Sent = %zu : Received = %zu : AvgDelay %llu us",

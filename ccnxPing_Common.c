@@ -30,7 +30,7 @@
  */
 #include <stdio.h>
 
-#include "ccnxPerf_Common.h"
+#include "ccnxPing_Common.h"
 
 #include <LongBow/runtime.h>
 
@@ -38,13 +38,13 @@
 #include <parc/security/parc_Pkcs12KeyStore.h>
 #include <parc/security/parc_IdentityFile.h>
 
-const size_t ccnxPerf_DefaultReceiveTimeoutInUs = 1000000;
-const size_t ccnxPerf_DefaultPayloadSize = 4096;
+const size_t ccnxPing_DefaultReceiveTimeoutInUs = 1000000; // 1 second
+const size_t ccnxPing_DefaultPayloadSize = 4096;
 const size_t mediumNumberOfPings = 100;
 const size_t smallNumberOfPings = 10;
 
 static PARCIdentity *
-_ccnxPerfCommon_CreateAndGetIdentity(const char *keystoreName,
+_ccnxPingCommon_CreateAndGetIdentity(const char *keystoreName,
                                      const char *keystorePassword,
                                      const char *subjectName)
 {
@@ -68,9 +68,9 @@ _ccnxPerfCommon_CreateAndGetIdentity(const char *keystoreName,
 }
 
 CCNxPortalFactory *
-ccnxPerfCommon_SetupPortalFactory(const char *keystoreName, const char *keystorePassword, const char *subjectName)
+ccnxPingCommon_SetupPortalFactory(const char *keystoreName, const char *keystorePassword, const char *subjectName)
 {
-    PARCIdentity *identity = _ccnxPerfCommon_CreateAndGetIdentity(keystoreName, keystorePassword, subjectName);
+    PARCIdentity *identity = _ccnxPingCommon_CreateAndGetIdentity(keystoreName, keystorePassword, subjectName);
     CCNxPortalFactory *result = ccnxPortalFactory_Create(identity);
     parcIdentity_Release(&identity);
 
