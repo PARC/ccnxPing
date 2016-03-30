@@ -48,13 +48,12 @@ typedef struct ping_stats_entry {
     CCNxMetaMessage *message;
 } CCNxPingStatsEntry;
 
-typedef struct ping_stats {
+struct ping_stats {
     uint64_t totalRtt;
     size_t totalReceived;
     size_t totalSent;
-
     PARCHashMap *pings;
-} CCNxPingStats;
+};
 
 static bool
 _ccnxPingStatsEntry_Destructor(CCNxPingStatsEntry **statsPtr)
