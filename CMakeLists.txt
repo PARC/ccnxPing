@@ -34,4 +34,4 @@ add_executable(ccnxPing_Server ${CCNX_PING_SERVER_SOURCE_FILES})
 target_link_libraries(ccnxPing_Server ${CCNX_LIBRARIES})
 install(TARGETS ccnxPing_Server RUNTIME DESTINATION bin)
 
-add_test(EmptyTest, COMMAND echo "OK")
+add_test(EmptyTest, echo "OK")
