@@ -175,6 +175,7 @@ _ccnxPingServer_Run(CCNxPingServer *server)
                 CCNxNameSegment *sizeSegment = ccnxName_GetSegment(interestName, sizeIndex);
                 char *segmentString = ccnxNameSegment_ToString(sizeSegment);
                 int size = atoi(segmentString);
+                size = size > ccnxPing_MaxPayloadSize ? ccnxPing_MaxPayloadSize : size;
 
                 PARCBuffer *payload = _ccnxPingServer_MakePayload(server, size);
 
