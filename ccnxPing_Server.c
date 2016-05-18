@@ -105,8 +105,12 @@ static bool
 _ccnxPingServer_Destructor(CCNxPingServer **serverPtr)
 {
     CCNxPingServer *server = *serverPtr;
-    ccnxPortal_Release(&(server->portal));
-    ccnxName_Release(&(server->prefix));
+    if (server->portal != NULL) {
+        ccnxPortal_Release(&(server->portal));
+    }
+    if (server->prefix != NULL) {
+        ccnxName_Release(&(server->prefix));
+    }
     return true;
 }
 
@@ -152,7 +156,7 @@ _ccnxPingServer_Run(CCNxPingServer *server)
 
     size_t yearInSeconds = 60 * 60 * 24 * 365;
 
-    size_t sizeIndex = ccnxName_GetNumberOfSegments(server->prefix) + 1;
+    size_t sizeIndex = ccnxName_GetSegmentCount(server->prefix) + 1;
 
     if (ccnxPortal_Listen(server->portal, server->prefix, yearInSeconds, CCNxStackTimeout_Never)) {
         while (true) {
@@ -198,7 +202,7 @@ _displayUsage(char *progName)
 {
     printf("%s [-l locator] [-s size] \n", progName);
     printf("%s -h\n", progName);
-    printf("           CCNx Simple Pingormance Test\n");
+    printf("           CCNx Simple Ping Performance Test\n");
     printf("\n");
     printf("Example:\n");
     printf("    ccnxPing_Server -l ccnx:/some/prefix -s 4096");
