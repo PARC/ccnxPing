@@ -173,8 +173,8 @@ _ccnxPingServer_Run(CCNxPingServer *server)
 
                 // Extract the size of the payload response from the client
                 CCNxNameSegment *sizeSegment = ccnxName_GetSegment(interestName, sizeIndex);
-                char *sizeString = ccnxNameSegment_ToString(sizeSegment);
-                int size = atoi(sizeString);
+                char *segmentString = ccnxNameSegment_ToString(sizeSegment);
+                int size = atoi(segmentString);
 
                 PARCBuffer *payload = _ccnxPingServer_MakePayload(server, size);
 

@@ -162,15 +162,23 @@ ccnxPingClient_Create(void)
 static CCNxName *
 _ccnxPingClient_CreateNextName(CCNxPingClient *client)
 {
-    char *suffixBuffer = NULL;
-    asprintf(&suffixBuffer, "/%x/%u/%06lu",
-             client->nonce,
-             client->payloadSize,
-             (long) client->interestCounter);
     client->interestCounter++;
-    CCNxName *name = ccnxName_ComposeNAME(ccnxName_Copy(client->prefix), suffixBuffer);
+    char *suffixBuffer = NULL;
+    asprintf(&suffixBuffer, "%x", client->nonce);
+    CCNxName *name1 = ccnxName_ComposeNAME(ccnxName_Copy(client->prefix), suffixBuffer);
     parcMemory_Deallocate(&suffixBuffer);
-    return name;
+
+    suffixBuffer = NULL;
+    asprintf(&suffixBuffer, "%u", client->payloadSize);
+    CCNxName *name2 = ccnxName_ComposeNAME(name1, suffixBuffer);
+    ccnxName_Release(&name1);
+
+    suffixBuffer = NULL;
+    asprintf(&suffixBuffer, "%06lu", (long) client->interestCounter);
+    CCNxName *name3 = ccnxName_ComposeNAME(name2, suffixBuffer);
+    ccnxName_Release(&name2);
+
+    return name3;
 }
 
 /**
@@ -296,6 +304,8 @@ _ccnxPingClient_ParseCommandline(CCNxPingClient *client, int argc, char *argv[ar
         { "help",        no_argument,       NULL, 'h' },
         { NULL,          0,                 NULL, 0   }
     };
+
+    client->payloadSize = ccnxPing_DefaultPayloadSize;
 
     int c;
     while ((c = getopt_long(argc, argv, "phfc:s:i:l:o:", longopts, NULL)) != -1) {
