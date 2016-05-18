@@ -271,7 +271,7 @@ _displayUsage(char *progName)
     printf("%s -p [ -c count ] [ -s size ] [ -i interval ]\n", progName);
     printf("%s -f [ -c count ] [ -s size ]\n", progName);
     printf("%s -h\n", progName);
-    printf("                CCNx Simple Pingormance Test\n");
+    printf("                CCNx Simple Ping Performance Test\n");
     printf("                :  You must have ccnxPingServer running\n");
     printf("\n");
     printf("Example:\n");
