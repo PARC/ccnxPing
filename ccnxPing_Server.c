@@ -201,14 +201,15 @@ _ccnxPingServer_Run(CCNxPingServer *server)
 static void
 _displayUsage(char *progName)
 {
-    printf("%s [-l locator] [-s size] \n", progName);
-    printf("%s -h\n", progName);
-    printf("           CCNx Simple Ping Performance Test\n");
+    printf("CCNx Simple Ping Performance Test\n");
+    printf("\n");
+    printf("Usage: %s [-l locator] [-s size] \n", progName);
+    printf("       %s -h\n", progName);
     printf("\n");
     printf("Example:\n");
-    printf("    ccnxPing_Server -l ccnx:/some/prefix -s 4096");
+    printf("    ccnxPing_Server -l ccnx:/some/prefix -s 4096\n");
     printf("\n");
-    printf("Options  \n");
+    printf("Options:\n");
     printf("     -h (--help) Show this help message\n");
     printf("     -l (--locator) Set the locator for this server. The default is 'ccnx:/locator'. \n");
     printf("     -s (--size) Set the payload size (less than 64000 - see `ccnxPing_MaxPayloadSize` in ccnxPing_Common.h)\n");
