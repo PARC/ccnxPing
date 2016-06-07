@@ -105,8 +105,12 @@ static bool
 _ccnxPingServer_Destructor(CCNxPingServer **serverPtr)
 {
     CCNxPingServer *server = *serverPtr;
-    ccnxPortal_Release(&(server->portal));
-    ccnxName_Release(&(server->prefix));
+    if (server->portal != NULL) {
+        ccnxPortal_Release(&(server->portal));
+    }
+    if (server->prefix != NULL) {
+        ccnxName_Release(&(server->prefix));
+    }
     return true;
 }
 
@@ -124,10 +128,6 @@ ccnxPingServer_Create(void)
 {
     CCNxPingServer *server = parcObject_CreateInstance(CCNxPingServer);
 
-    CCNxPortalFactory *factory = _setupServerPortalFactory();
-    server->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
-    ccnxPortalFactory_Release(&factory);
-
     server->prefix = ccnxName_CreateFromCString(ccnxPing_DefaultPrefix);
     server->payloadSize = ccnxPing_DefaultPayloadSize;
 
@@ -138,9 +138,9 @@ ccnxPingServer_Create(void)
  * Create a `PARCBuffer` payload of the server-configured size.
  */
 PARCBuffer *
-_ccnxPingServer_MakePayload(CCNxPingServer *server)
+_ccnxPingServer_MakePayload(CCNxPingServer *server, int size)
 {
-    PARCBuffer *payload = parcBuffer_Wrap(server->generalPayload, ccnxPing_MaxPayloadSize, 0, server->payloadSize);
+    PARCBuffer *payload = parcBuffer_Wrap(server->generalPayload, size, 0, size);
     return payload;
 }
 
@@ -150,7 +150,14 @@ _ccnxPingServer_MakePayload(CCNxPingServer *server)
 static void
 _ccnxPingServer_Run(CCNxPingServer *server)
 {
+    CCNxPortalFactory *factory = _setupServerPortalFactory();
+    server->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
+    ccnxPortalFactory_Release(&factory);
+
     size_t yearInSeconds = 60 * 60 * 24 * 365;
+
+    size_t sizeIndex = ccnxName_GetSegmentCount(server->prefix) + 1;
+
     if (ccnxPortal_Listen(server->portal, server->prefix, yearInSeconds, CCNxStackTimeout_Never)) {
         while (true) {
             CCNxMetaMessage *request = ccnxPortal_Receive(server->portal, CCNxStackTimeout_Never);
@@ -164,7 +171,13 @@ _ccnxPingServer_Run(CCNxPingServer *server)
             if (interest != NULL) {
                 CCNxName *interestName = ccnxInterest_GetName(interest);
 
-                PARCBuffer *payload = _ccnxPingServer_MakePayload(server);
+                // Extract the size of the payload response from the client
+                CCNxNameSegment *sizeSegment = ccnxName_GetSegment(interestName, sizeIndex);
+                char *segmentString = ccnxNameSegment_ToString(sizeSegment);
+                int size = atoi(segmentString);
+                size = size > ccnxPing_MaxPayloadSize ? ccnxPing_MaxPayloadSize : size;
+
+                PARCBuffer *payload = _ccnxPingServer_MakePayload(server, size);
 
                 CCNxContentObject *contentObject = ccnxContentObject_CreateWithNameAndPayload(interestName, payload);
                 CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(contentObject);
@@ -188,17 +201,18 @@ _ccnxPingServer_Run(CCNxPingServer *server)
 static void
 _displayUsage(char *progName)
 {
-    printf("%s [-l locator] [-s size] \n", progName);
-    printf("%s -h\n", progName);
-    printf("           CCNx Simple Pingormance Test\n");
+    printf("CCNx Simple Ping Performance Test\n");
+    printf("\n");
+    printf("Usage: %s [-l locator] [-s size] \n", progName);
+    printf("       %s -h\n", progName);
     printf("\n");
     printf("Example:\n");
-    printf("    ccnxPing_Server -l ccnx:/some/prefix -s 4096");
+    printf("    ccnxPing_Server -l ccnx:/some/prefix -s 4096\n");
     printf("\n");
-    printf("Options  \n");
+    printf("Options:\n");
     printf("     -h (--help) Show this help message\n");
     printf("     -l (--locator) Set the locator for this server. The default is 'ccnx:/locator'. \n");
-    printf("     -s (--size) Set the payload size\n");
+    printf("     -s (--size) Set the payload size (less than 64000 - see `ccnxPing_MaxPayloadSize` in ccnxPing_Common.h)\n");
 }
 
 /**
@@ -214,6 +228,9 @@ _ccnxPingServer_ParseCommandline(CCNxPingServer *server, int argc, char *argv[ar
         { NULL,      0,                 NULL, 0   }
     };
 
+    // Default value
+    server->payloadSize = ccnxPing_MaxPayloadSize;
+
     int c;
     while ((c = getopt_long(argc, argv, "l:s:h", longopts, NULL)) != -1) {
         switch (c) {
@@ -222,6 +239,10 @@ _ccnxPingServer_ParseCommandline(CCNxPingServer *server, int argc, char *argv[ar
                 break;
             case 's':
                 sscanf(optarg, "%zu", &(server->payloadSize));
+                if (server->payloadSize > ccnxPing_MaxPayloadSize) {
+                    _displayUsage(argv[0]);
+                    return false;
+                }
                 break;
             case 'h':
                 _displayUsage(argv[0]);
@@ -240,8 +261,8 @@ main(int argc, char *argv[argc])
     parcSecurity_Init();
 
     CCNxPingServer *server = ccnxPingServer_Create();
-
     bool runServer = _ccnxPingServer_ParseCommandline(server, argc, argv);
+
     if (runServer) {
         _ccnxPingServer_Run(server);
     }

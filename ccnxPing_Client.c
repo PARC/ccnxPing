@@ -70,6 +70,7 @@
 
 #include <parc/security/parc_Security.h>
 #include <parc/security/parc_IdentityFile.h>
+#include <parc/algol/parc_DisplayIndented.h>
 
 #include "ccnxPing_Stats.h"
 #include "ccnxPing_Common.h"
@@ -120,8 +121,12 @@ static bool
 _ccnxPingClient_Destructor(CCNxPingClient **clientPtr)
 {
     CCNxPingClient *client = *clientPtr;
-    ccnxPortal_Release(&(client->portal));
-    ccnxName_Release(&(client->prefix));
+    if (client->portal != NULL) {
+        ccnxPortal_Release(&(client->portal));
+    }
+    if (client->prefix != NULL) {
+        ccnxName_Release(&(client->prefix));
+    }
     return true;
 }
 
@@ -138,10 +143,6 @@ static CCNxPingClient *
 ccnxPingClient_Create(void)
 {
     CCNxPingClient *client = parcObject_CreateInstance(CCNxPingClient);
-
-    CCNxPortalFactory *factory = _setupClientPortalFactory();
-    client->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
-    ccnxPortalFactory_Release(&factory);
 
     client->stats = ccnxPingStats_Create();
     client->interestCounter = 100;
@@ -162,15 +163,23 @@ ccnxPingClient_Create(void)
 static CCNxName *
 _ccnxPingClient_CreateNextName(CCNxPingClient *client)
 {
-    char *suffixBuffer = NULL;
-    asprintf(&suffixBuffer, "/%x/%u/%06lu",
-             client->nonce,
-             client->payloadSize,
-             (long) client->interestCounter);
     client->interestCounter++;
-    CCNxName *name = ccnxName_ComposeNAME(ccnxName_Copy(client->prefix), suffixBuffer);
+    char *suffixBuffer = NULL;
+    asprintf(&suffixBuffer, "%x", client->nonce);
+    CCNxName *name1 = ccnxName_ComposeNAME(ccnxName_Copy(client->prefix), suffixBuffer);
     parcMemory_Deallocate(&suffixBuffer);
-    return name;
+
+    suffixBuffer = NULL;
+    asprintf(&suffixBuffer, "%u", client->payloadSize);
+    CCNxName *name2 = ccnxName_ComposeNAME(name1, suffixBuffer);
+    ccnxName_Release(&name1);
+
+    suffixBuffer = NULL;
+    asprintf(&suffixBuffer, "%06lu", (long) client->interestCounter);
+    CCNxName *name3 = ccnxName_ComposeNAME(name2, suffixBuffer);
+    ccnxName_Release(&name2);
+
+    return name3;
 }
 
 /**
@@ -192,6 +201,10 @@ static void
 _ccnxPingClient_RunPing(CCNxPingClient *client, size_t totalPings, uint64_t delayInUs)
 {
     PARCClock *clock = parcClock_Wallclock();
+
+    CCNxPortalFactory *factory = _setupClientPortalFactory();
+    client->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
+    ccnxPortalFactory_Release(&factory);
 
     size_t outstanding = 0;
     bool checkOustanding = client->numberOfOutstanding > 0;
@@ -260,16 +273,17 @@ _ccnxPingClient_RunPing(CCNxPingClient *client, size_t totalPings, uint64_t dela
 static void
 _displayUsage(char *progName)
 {
-    printf("%s -p [ -c count ] [ -s size ] [ -i interval ]\n", progName);
-    printf("%s -f [ -c count ] [ -s size ]\n", progName);
-    printf("%s -h\n", progName);
-    printf("                CCNx Simple Pingormance Test\n");
-    printf("                :  You must have ccnxPingServer running\n");
+    printf("CCNx Simple Ping Performance Test\n");
+    printf("   (you must have ccnxPing_Server running)\n");
+    printf("\n");
+    printf("Usage: %s -p [ -c count ] [ -s size ] [ -i interval ]\n", progName);
+    printf("       %s -f [ -c count ] [ -s size ]\n", progName);
+    printf("       %s -h\n", progName);
     printf("\n");
     printf("Example:\n");
-    printf("    ccnxPing_Client -l ccnx:/some/prefix -c 100 -f");
+    printf("    ccnxPing_Client -l ccnx:/some/prefix -c 100 -f\n");
     printf("\n");
-    printf("Options  \n");
+    printf("Options:\n");
     printf("     -h (--help) Show this help message\n");
     printf("     -p (--ping) ping mode - \n");
     printf("     -f (--flood) flood mode - send as fast as possible\n");
@@ -296,6 +310,8 @@ _ccnxPingClient_ParseCommandline(CCNxPingClient *client, int argc, char *argv[ar
         { "help",        no_argument,       NULL, 'h' },
         { NULL,          0,                 NULL, 0   }
     };
+
+    client->payloadSize = ccnxPing_DefaultPayloadSize;
 
     int c;
     while ((c = getopt_long(argc, argv, "phfc:s:i:l:o:", longopts, NULL)) != -1) {
